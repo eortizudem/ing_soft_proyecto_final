@@ -1,0 +1,10 @@
+{
+  "origen": "servicios_escolares",
+  "nota": "Fuente simulada de Servicios Escolares (D-23). Solo alumnos y docentes.",
+  "registros": [
+    {"matricula": "A0512345", "nombre_completo": "María García", "correo": "maria@ducky.edu.mx", "rol": "alumno", "estado": "activo"},
+    {"matricula": "A0520001", "nombre_completo": "Sofía Hernández Prado", "correo": "sofia.hernandez@ducky.edu.mx", "rol": "alumno", "estado": "activo"},
+    {"matricula": "A0520002", "nombre_completo": "Diego Ramírez Soto", "correo": "diego.ramirez@ducky.edu.mx", "rol": "alumno", "estado": "activo"},
+    {"matricula": "D0100001", "nombre_completo": "Dra. Patricia Núñez", "correo": "patricia.nunez@ducky.edu.mx", "rol": "docente", "estado": "activo"}
+  ]
+}

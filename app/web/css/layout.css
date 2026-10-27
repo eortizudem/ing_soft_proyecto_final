@@ -1,0 +1,475 @@
+/* App shell and page structure. Spacing comes only from the --space-* tokens. */
+
+.brand {
+  display:flex;
+  align-items:center;
+  gap:var(--space-3);
+  font-size:20px;
+  font-weight:700;
+}
+
+.brand img {
+  display:block;
+  width:40px;
+  height:40px;
+  flex-shrink:0;
+}
+
+.brand img.stacked {
+  object-fit:contain;
+}
+
+/* ---- Login ---- */
+.login {
+  display:grid;
+  grid-template-columns:46.53% 1fr;
+  min-height:100vh;
+  background:var(--surface);
+}
+
+.identity {
+  background:var(--dark);
+  color:#fff;
+  padding:var(--space-8) var(--space-8) var(--space-7);
+  display:flex;
+  flex-direction:column;
+  gap:var(--space-6);
+}
+
+.identity h1 {
+  margin-top:var(--space-8);
+  max-width:510px;
+}
+
+.identity .slogan {
+  font-size:16px;
+  font-weight:700;
+}
+
+.identity .university {
+  margin-top:auto;
+  display:flex;
+  flex-direction:column;
+  gap:var(--space-2);
+}
+
+.login-content {
+  padding:var(--space-8) var(--page-x);
+  max-width:800px;
+}
+
+/* ---- Sidebar ---- */
+.sidebar {
+  position:fixed;
+  left:0;
+  top:0;
+  bottom:0;
+  width:236px;
+  background:var(--surface);
+  z-index:25;
+  padding:var(--space-5) var(--space-4);
+  display:flex;
+  flex-direction:column;
+  gap:var(--space-5);
+}
+
+.sidebar .brand {
+  padding:0 var(--space-2);
+}
+
+.sidebar .library {
+  padding:0 var(--space-2);
+  color:var(--muted);
+  font:13px var(--mono);
+}
+
+nav {
+  display:flex;
+  flex-direction:column;
+  gap:var(--space-2);
+}
+
+nav .btn {
+  width:100%;
+  background:transparent;
+  color:var(--text);
+}
+
+nav .btn.active {
+  background:var(--info-bg);
+  color:var(--primary);
+}
+
+.sidebar-bottom {
+  margin-top:auto;
+  display:flex;
+  flex-direction:column;
+  gap:var(--space-2);
+  padding:0 var(--space-2);
+}
+
+.sidebar-bottom .mono {
+  color:var(--muted);
+}
+
+.sidebar-bottom>.btn {
+  margin-top:var(--space-4);
+  width:100%;
+}
+
+/* ---- Workspace ---- */
+.workspace {
+  margin-left:236px;
+  min-height:100vh;
+  display:flex;
+  flex-direction:column;
+}
+
+.topbar {
+  min-height:80px;
+  background:var(--surface);
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:var(--space-3) var(--page-x);
+  gap:var(--space-4);
+}
+
+.topbar p {
+  color:var(--muted);
+}
+
+.menu-toggle {
+  display:none;
+}
+
+.content,
+.mobile-frame {
+  padding:var(--space-6) var(--page-x);
+  flex:1;
+  min-width:0;
+}
+
+.page {
+  display:flex;
+  flex-direction:column;
+  gap:var(--space-5);
+  width:100%;
+  max-width:var(--page-max);
+  margin:0 auto;
+}
+
+.page-header {
+  display:flex;
+  flex-wrap:wrap;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:var(--space-4);
+}
+
+.page-title {
+  display:flex;
+  flex-direction:column;
+  gap:var(--space-2);
+  flex:1 1 320px;
+  min-width:0;
+}
+
+.page-desc {
+  color:var(--muted);
+}
+
+.page-footer {
+  padding:var(--space-4) var(--page-x);
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:var(--space-4);
+  min-height:80px;
+}
+
+.page-footer p {
+  color:var(--muted);
+  font:13px var(--mono);
+}
+
+.page-footer .btn {
+  background:var(--surface);
+}
+
+.mobile-frame {
+  --page-x:var(--space-4);
+  max-width:430px;
+  width:100%;
+  margin:0 auto;
+  background:var(--bg);
+}
+
+/* Narrow containers: the toolbar stacks (also inside the mobile frame). */
+.mobile-frame .toolbar {
+  flex-direction:column;
+  align-items:stretch;
+}
+
+.mobile-frame .toolbar>* {
+  flex:none;
+}
+
+.location-grid {
+  display:grid;
+  grid-template-columns:1.6fr 1fr;
+  gap:var(--space-5);
+}
+
+.mobile-frame .location-grid {
+  grid-template-columns:1fr;
+}
+
+.mobile-frame .shelves {
+  gap:var(--space-2);
+}
+
+.mobile-frame .shelf {
+  font-size:10px;
+}
+
+@media(max-width:1100px) {
+  :root {
+    --page-x:var(--space-6);
+  }
+  .sidebar {
+    width:220px;
+  }
+  .workspace {
+    margin-left:220px;
+  }
+  .identity {
+    padding-left:var(--space-7);
+    padding-right:var(--space-7);
+  }
+  .purchase-line {
+    grid-template-columns:2fr 1fr 1fr;
+  }
+  .purchase-line>.btn {
+    grid-column:1/-1;
+  }
+  .location-grid {
+    grid-template-columns:1fr;
+  }
+}
+
+@media(max-width:760px) {
+  :root {
+    --page-x:var(--space-4);
+  }
+  .login {
+    grid-template-columns:1fr;
+  }
+  .identity {
+    padding:var(--space-5) var(--space-5);
+  }
+  .identity h1 {
+    margin-top:0;
+  }
+  .identity .university {
+    display:none;
+  }
+  .login-content {
+    padding:var(--space-6) var(--page-x);
+    width:100%;
+    max-width:none;
+  }
+  .sidebar {
+    display:none;
+    box-shadow:8px 0 30px #0002;
+    width:236px;
+  }
+  .sidebar.open {
+    display:flex;
+  }
+  .workspace {
+    margin-left:0;
+  }
+  .topbar {
+    min-height:70px;
+    gap:var(--space-3);
+  }
+  .topbar .badge {
+    font-size:11px;
+  }
+  .topbar p {
+    font-size:12px;
+    margin-right:auto;
+  }
+  .menu-toggle {
+    display:inline-flex;
+    padding:var(--space-2);
+  }
+  .page-header h1 {
+    font-size:24px;
+  }
+  .page-footer {
+    flex-direction:column;
+    align-items:flex-start;
+  }
+  .grid.cols-2,
+  .grid.cols-3,
+  .form-grid,
+  .detail-grid {
+    grid-template-columns:1fr;
+  }
+  .grid>.full,
+  .form-grid>.wide {
+    grid-column:auto;
+  }
+  .card {
+    padding:var(--space-4);
+  }
+  .toolbar {
+    flex-direction:column;
+    align-items:stretch;
+  }
+  .toolbar>* {
+    flex:none;
+  }
+  .form-actions .btn,
+  .actions .btn {
+    flex:1 1 auto;
+  }
+  .purchase-line {
+    grid-template-columns:1fr 1fr;
+  }
+  .purchase-line>.field:first-child {
+    grid-column:1/-1;
+  }
+  .total {
+    font-size:18px;
+  }
+  .demo-buttons {
+    gap:var(--space-2);
+  }
+  #toast {
+    left:var(--space-4);
+    right:var(--space-4);
+    bottom:var(--space-4);
+    max-width:none;
+  }
+}
+
+@media print {
+  body {
+    background:#fff;
+    font:10pt Arial;
+    color:#000;
+  }
+  #app,
+  #dialog-root,
+  #toast,
+  .skip {
+    display:none!important;
+  }
+  #print-root {
+    display:block;
+    padding:8mm;
+  }
+  #print-root h1 {
+    font-size:18pt;
+    margin:0 0 12px;
+  }
+  #print-root p {
+    margin-bottom:16px;
+  }
+  #print-root table {
+    border-collapse:collapse;
+    border-spacing:0;
+    width:100%;
+    font-size:9pt;
+  }
+  #print-root th,
+  #print-root td {
+    padding:8px;
+    border:1px solid #aaa;
+    height:auto;
+    font:9pt Arial;
+    color:#000;
+  }
+  #print-root tr {
+    break-inside:avoid;
+    background:#fff;
+  }
+
+  /* Receipts (préstamo, compra, pago de adeudo) and the catálogo ficha/etiquetas: black on white, borders
+     instead of colour, so they read the same on a grayscale printer. */
+  #print-root .receipt {
+    display:block;
+    margin:0 0 8mm;
+    padding:6mm;
+    border:1.5pt solid #000;
+    border-radius:0;
+    background:#fff;
+    box-shadow:none;
+    break-inside:avoid;
+  }
+  #print-root .receipt,
+  #print-root .receipt * {
+    color:#000!important;
+    -webkit-print-color-adjust:economy;
+    print-color-adjust:economy;
+  }
+  #print-root .receipt h2 {
+    margin:0 0 2mm;
+    font:700 14pt Arial;
+    text-transform:uppercase;
+  }
+  #print-root .receipt h3 {
+    margin:6mm 0 2mm;
+    font:700 11pt Arial;
+  }
+  #print-root .receipt p {
+    margin:0 0 2mm;
+  }
+  #print-root .receipt .mono {
+    font:700 11pt 'Courier New',monospace;
+  }
+  #print-root .receipt .detail-grid {
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:3mm 8mm;
+    margin:4mm 0;
+  }
+  #print-root .receipt .detail-item {
+    display:block;
+    break-inside:avoid;
+  }
+  #print-root .receipt dt {
+    font:700 8pt Arial;
+    text-transform:uppercase;
+    letter-spacing:.04em;
+  }
+  #print-root .receipt dd {
+    margin:0;
+    font:10pt Arial;
+  }
+  #print-root .receipt .badge {
+    display:inline-block;
+    padding:0 2mm;
+    border:1pt solid #000;
+    background:#fff;
+    font:700 9pt Arial;
+  }
+  #print-root .receipt .eyebrow {
+    font:700 8pt Arial;
+    text-transform:uppercase;
+  }
+  #print-root .receipt table th {
+    background:#fff;
+    border:1pt solid #000;
+  }
+  #print-root .receipt table td {
+    border:1pt dashed #000;
+  }
+  #print-root .receipt .btn,
+  #print-root .receipt .actions {
+    display:none!important;
+  }
+}

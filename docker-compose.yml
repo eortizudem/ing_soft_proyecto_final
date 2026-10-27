@@ -1,0 +1,50 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped  # RNF-12: vuelve solo tras un fallo o reinicio del servidor
+    command: ["postgres", "-c", "timezone=${TZ:-America/Mexico_City}"]  # fechas locales: el navegador muestra la hora sin desfase
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-librigest}
+      POSTGRES_USER: ${POSTGRES_USER:-librigest}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-librigest}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db:/docker-entrypoint-initdb.d:ro
+      - ./backups:/backups  # RNF-02: destino de respaldos (scripts/respaldo.py escribe aqui desde el host)
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      TZ: ${TZ:-America/Mexico_City}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-librigest}:${POSTGRES_PASSWORD:-librigest}@db:5432/${POSTGRES_DB:-librigest}
+      SECRET_KEY: ${SECRET_KEY:-dev-secret-change-me}
+      # Parametros de negocio; mismos valores por defecto que app/config.py
+      TIPO_CAMBIO_USD_MXN: ${TIPO_CAMBIO_USD_MXN:-18.00}
+      PRESUPUESTO_MENSUAL_USD: ${PRESUPUESTO_MENSUAL_USD:-5000}
+      ESPERA_DIAS_RESERVA: ${ESPERA_DIAS_RESERVA:-2}
+      # Seguridad (docs/operacion.md): token de recuperacion visible en la API solo en demostracion; HTTPS=true tras un proxy TLS
+      WEB_CONCURRENCY: ${WEB_CONCURRENCY:-4}  # procesos de gunicorn (una por nucleo)
+      DEMO_MOSTRAR_TOKEN: ${DEMO_MOSTRAR_TOKEN:-true}
+      HTTPS: ${HTTPS:-false}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+volumes:
+  pgdata:
