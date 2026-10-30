@@ -1,3 +1,9 @@
+"""Pruebas de integración de préstamos (RN-01..RN-06, D-01..D-06, D-24).
+
+Cubre permisos, validación RN-01, vigencia en días hábiles, alta con recibo,
+concurrencia sobre el último ejemplar, renovaciones, devolución con multa,
+listados y políticas. Usa la BD de pruebas y los helpers de `app.testing`.
+"""
 import threading
 from datetime import date, timedelta
 
@@ -10,39 +16,47 @@ from app.testing import client_as, make_book, make_loan, make_user, sql
 
 # ------------------------------------------------------------------ helpers
 def _validar(c, usuario, libro, **extra):
+    """Llama a POST /api/prestamos/validar, exige 200 y devuelve el JSON."""
     r = c.post("/api/prestamos/validar", json={"matricula": usuario["matricula"], "clave": libro["clave"], **extra})
     assert r.status_code == 200, r.get_json()
     return r.get_json()
 
 
 def _codigos(r):
+    """Conjunto de códigos de `motivos` de una respuesta de validación."""
     return {m["codigo"] for m in r["motivos"]}
 
 
 def _prestar(c, usuario, libro, **extra):
+    """POST /api/prestamos para el usuario y libro dados; devuelve la respuesta cruda."""
     return c.post("/api/prestamos", json={"matricula": usuario["matricula"], "clave": libro["clave"], **extra})
 
 
 def _loan_for(usuario, ejemplares=1, **book):
+    """Crea un libro y un préstamo abierto para el usuario; devuelve (libro, id_prestamo)."""
     libro = make_book(ejemplares=ejemplares, **book)
     return libro, make_loan(usuario["id_usuario"], libro["id_libro"])
 
 
 def _cerrar(id_prestamo):
+    """Cierra un préstamo directamente en BD (ejemplar disponible, devuelto hoy)."""
     sql("UPDATE ejemplar SET estado='disponible' WHERE id_ejemplar=(SELECT id_ejemplar FROM prestamo WHERE id_prestamo=%s)",
         (id_prestamo,))
     sql("UPDATE prestamo SET fecha_devolucion=now(), estado='devuelto' WHERE id_prestamo=%s", (id_prestamo,))
 
 
 def _vence(id_prestamo, fecha):
+    """Fija la fecha de vencimiento de un préstamo directamente en BD."""
     sql("UPDATE prestamo SET fecha_vencimiento=%s WHERE id_prestamo=%s", (fecha, id_prestamo))
 
 
 def _bitacora(accion, like="%"):
+    """Detalles de bitácora de una acción que coinciden con el patrón LIKE."""
     return sql("SELECT detalle FROM bitacora WHERE accion=%s AND detalle LIKE %s", (accion, like))
 
 
 def _fake_today(monkeypatch, dia):
+    """Reemplaza `date.today()` del servicio por un día fijo (monkeypatch)."""
     class Fake(date):
         @classmethod
         def today(cls):
@@ -53,6 +67,7 @@ def _fake_today(monkeypatch, dia):
 
 # ------------------------------------------------------------------ permisos
 def test_permisos(alumno, anon, colaborador, bibliotecario):
+    """Sin sesión 401; alumno y colaborador 403; bibliotecario accede."""
     for ruta in ("/api/prestamos", "/api/politicas"):
         assert anon.get(ruta).status_code == 401
         assert alumno.get(ruta).status_code == 403
@@ -65,6 +80,7 @@ def test_permisos(alumno, anon, colaborador, bibliotecario):
 
 # ------------------------------------------------------------------ RN-01 una por una
 def test_validar_autorizado(bibliotecario):
+    """Usuario y libro elegibles: validar devuelve autorizado sin motivos."""
     u, libro = make_user(), make_book()
     r = _validar(bibliotecario, u, libro)
     assert r["autorizado"] and r["motivos"] == []
@@ -76,6 +92,7 @@ def test_validar_autorizado(bibliotecario):
 
 
 def test_validar_usuario_y_libro_inexistentes(bibliotecario):
+    """Matrícula o clave inexistentes devuelven motivos *_NO_ENCONTRADO con 200."""
     u, libro = make_user(), make_book()
     r = bibliotecario.post("/api/prestamos/validar", json={"matricula": "NOEXISTE9", "clave": libro["clave"]}).get_json()
     assert not r["autorizado"] and "USUARIO_NO_ENCONTRADO" in _codigos(r)
@@ -86,6 +103,7 @@ def test_validar_usuario_y_libro_inexistentes(bibliotecario):
 
 
 def test_alumno_con_dos_prestamos_rechazado(bibliotecario):
+    """Alumno con 2 préstamos abiertos es rechazado por LIMITE_EJEMPLARES (D-01)."""
     u = make_user()
     _loan_for(u)
     assert _validar(bibliotecario, u, make_book())["autorizado"]  # con 1 aun puede
@@ -95,6 +113,7 @@ def test_alumno_con_dos_prestamos_rechazado(bibliotecario):
 
 
 def test_docente_con_tres_prestamos_rechazado(bibliotecario):
+    """Docente con 3 préstamos abiertos es rechazado por LIMITE_EJEMPLARES (D-01)."""
     d = make_user(rol="docente")
     for _ in range(2):
         _loan_for(d)
@@ -105,6 +124,7 @@ def test_docente_con_tres_prestamos_rechazado(bibliotecario):
 
 
 def test_con_multa_pendiente(bibliotecario):
+    """Un adeudo pendiente bloquea el préstamo con MULTAS_PENDIENTES (RN-01.a)."""
     u = make_user()
     _, pid = _loan_for(u)
     _cerrar(pid)
@@ -113,6 +133,7 @@ def test_con_multa_pendiente(bibliotecario):
 
 
 def test_con_prestamo_vencido(bibliotecario):
+    """Un préstamo vencido sin devolver bloquea con PRESTAMOS_VENCIDOS (RN-01.c)."""
     u = make_user()
     _, pid = _loan_for(u)
     _vence(pid, date.today() - timedelta(days=3))
@@ -122,21 +143,25 @@ def test_con_prestamo_vencido(bibliotecario):
 @pytest.mark.parametrize("tipo,codigo", [("consulta_interna", "LIBRO_NO_PRESTABLE"), ("reservado", "LIBRO_NO_PRESTABLE"),
                                          ("prestamo_externo", "LIBRO_NO_DISPONIBLE")])
 def test_libro_no_prestable_o_sin_copias(bibliotecario, tipo, codigo):
+    """Libros de consulta interna, reservados o sin copias libres devuelven el código esperado."""
     u = make_user()
     libro = make_book(tipo_uso=tipo, ejemplares=0 if codigo == "LIBRO_NO_DISPONIBLE" else 2)
     assert _codigos(_validar(bibliotecario, u, libro)) == {codigo}
 
 
 def test_libro_inactivo_y_usuario_inactivo(bibliotecario):
+    """Libro o usuario inactivos son rechazados con su motivo."""
     assert "LIBRO_INACTIVO" in _codigos(_validar(bibliotecario, make_user(), make_book(estado="inactivo")))
     assert "USUARIO_INACTIVO" in _codigos(_validar(bibliotecario, make_user(estado="inactivo"), make_book()))
 
 
 def test_sin_politica_activa(bibliotecario):
+    """Un rol sin política de préstamo (comprador) se rechaza con SIN_POLITICA."""
     assert "SIN_POLITICA" in _codigos(_validar(bibliotecario, make_user(rol="comprador"), make_book()))
 
 
 def test_reservado_para_otro_usuario(bibliotecario):
+    """Un ejemplar apartado por la lista de espera para otro usuario no se puede prestar."""
     esperando, otro = make_user(), make_user()
     libro = make_book(ejemplares=1)
     sql("INSERT INTO lista_espera(id_usuario,id_libro,estado,fecha_notificacion,fecha_limite_recoger) "
@@ -154,10 +179,12 @@ def test_reservado_para_otro_usuario(bibliotecario):
     (date(2026, 10, 26), 5, date(2026, 11, 2)),    # lunes -> lunes siguiente (el dia de prestamo no cuenta)
 ])
 def test_vigencia_5_y_10_habiles(dia, dias, esperado):
+    """La fecha de vencimiento cuenta 5 (alumno) y 10 (docente) días hábiles (D-03)."""
     assert circulacion.fecha_vencimiento(dia, dias) == esperado
 
 
 def test_vigencia_en_prestamo_real(bibliotecario):
+    """El préstamo creado persiste el vencimiento calculado en días hábiles."""
     for rol, dias in (("alumno", 5), ("docente", 10)):
         u, libro = make_user(rol=rol), make_book()
         p = _prestar(bibliotecario, u, libro).get_json()["prestamo"]
@@ -166,6 +193,7 @@ def test_vigencia_en_prestamo_real(bibliotecario):
 
 # ------------------------------------------------------------------ crear + recibo
 def test_crear_prestamo_y_recibo(bibliotecario):
+    """Crear devuelve 201 con préstamo y recibo, ejemplar prestado y aviso enviado."""
     u, libro = make_user(), make_book(ejemplares=1)
     r = _prestar(bibliotecario, u, libro)
     assert r.status_code == 201, r.get_json()
@@ -186,6 +214,7 @@ def test_crear_prestamo_y_recibo(bibliotecario):
 
 
 def test_crear_422_conserva_codigos_y_no_escribe(bibliotecario):
+    """Usuario inactivo o libro inexistente dan 422 con su código y sin tocar los ejemplares."""
     u = make_user(estado="inactivo")
     libro = make_book()
     r = _prestar(bibliotecario, u, libro)
@@ -196,6 +225,7 @@ def test_crear_422_conserva_codigos_y_no_escribe(bibliotecario):
 
 
 def test_canales_del_recibo(bibliotecario):
+    """Valida canales del recibo: por defecto email, whatsapp permitido, otros rechazados."""
     u, libro = make_user(), make_book()
     d = _prestar(bibliotecario, u, libro, canales=["email", "whatsapp"]).get_json()
     assert [n["canal"] for n in d["recibo"]["notificaciones"]] == ["email", "whatsapp"]
@@ -211,6 +241,7 @@ def test_canales_del_recibo(bibliotecario):
 
 
 def test_recoger_espera_al_prestar(bibliotecario):
+    """Al prestar al usuario notificado su entrada de espera pasa a 'recogido'."""
     u, libro = make_user(), make_book(ejemplares=1)
     sql("INSERT INTO lista_espera(id_usuario,id_libro,estado,fecha_notificacion,fecha_limite_recoger) "
         "VALUES (%s,%s,'notificado',now(),now()+interval '2 days')", (u["id_usuario"], libro["id_libro"]))
@@ -220,12 +251,14 @@ def test_recoger_espera_al_prestar(bibliotecario):
 
 
 def test_concurrencia_ultimo_ejemplar(app):
+    """Dos préstamos simultáneos del último ejemplar: solo uno tiene éxito."""
     libro = make_book(ejemplares=1)
     usuarios = [make_user(), make_user()]
     clientes = [client_as(app, "BIB001", "Biblioteca123") for _ in usuarios]
     barrera, estados = threading.Barrier(2), []
 
     def intentar(c, u):
+        """Hilo auxiliar: intenta prestar el libro con un cliente y guarda el status."""
         barrera.wait()
         estados.append(_prestar(c, u, libro).status_code)
 
@@ -239,6 +272,7 @@ def test_concurrencia_ultimo_ejemplar(app):
 
 # ------------------------------------------------------------------ renovar
 def test_renovaciones_alumno_2_y_docente_3(bibliotecario):
+    """Alumno puede renovar 2 veces y docente 3; la siguiente da MAX_RENOVACIONES (RN-02/RN-06)."""
     for rol, maximo, dias in (("alumno", 2, 5), ("docente", 3, 10)):
         u = make_user(rol=rol)
         pid = _prestar(bibliotecario, u, make_book()).get_json()["prestamo"]["id_prestamo"]
@@ -257,6 +291,7 @@ def test_renovaciones_alumno_2_y_docente_3(bibliotecario):
 
 
 def test_renovar_rechazos_d05(bibliotecario):
+    """Renovar se rechaza si está vencido, hay espera, hay adeudos o está cerrado; 404 si no existe (D-05)."""
     u = make_user()
     libro, pid = _loan_for(u)
     # vencido
@@ -287,6 +322,7 @@ def test_renovar_rechazos_d05(bibliotecario):
 
 # ------------------------------------------------------------------ devolver
 def _devolver_con_hoy(monkeypatch, c, hoy, vencimiento):
+    """Crea un préstamo, fija vencimiento y 'hoy' simulado, y llama a devolver."""
     u, libro = make_user(), make_book(ejemplares=1)
     pid = _prestar(c, u, libro).get_json()["prestamo"]["id_prestamo"]
     _vence(pid, vencimiento)
@@ -295,6 +331,7 @@ def _devolver_con_hoy(monkeypatch, c, hoy, vencimiento):
 
 
 def test_devolucion_a_tiempo_sin_adeudo(bibliotecario, monkeypatch):
+    """Devolver a tiempo (incluido el día de vencimiento) no genera adeudo (D-03)."""
     viernes = date(2026, 10, 30)
     libro, pid, r = _devolver_con_hoy(monkeypatch, bibliotecario, viernes, viernes)  # el dia de vencimiento no multa
     d = r.get_json()
@@ -306,6 +343,7 @@ def test_devolucion_a_tiempo_sin_adeudo(bibliotecario, monkeypatch):
 
 
 def test_devolucion_un_dia_habil_tarde_y_fin_de_semana(bibliotecario, monkeypatch):
+    """Retraso de 1 día hábil cuesta $10 y el fin de semana no genera multa (D-04)."""
     viernes, lunes, martes = date(2026, 10, 30), date(2026, 11, 2), date(2026, 11, 3)
     _, pid, r = _devolver_con_hoy(monkeypatch, bibliotecario, lunes, viernes)  # vence viernes, lunes = 1 dia
     d = r.get_json()
@@ -320,6 +358,7 @@ def test_devolucion_un_dia_habil_tarde_y_fin_de_semana(bibliotecario, monkeypatc
 
 
 def test_devolver_dos_veces_y_inexistente(bibliotecario):
+    """Devolver dos veces da 409 y un préstamo inexistente 404."""
     _, pid = _loan_for(make_user())
     assert bibliotecario.post(f"/api/prestamos/{pid}/devolver").status_code == 200
     assert bibliotecario.post(f"/api/prestamos/{pid}/devolver").status_code == 409
@@ -327,6 +366,7 @@ def test_devolver_dos_veces_y_inexistente(bibliotecario):
 
 
 def test_devolucion_notifica_al_primero_en_espera(bibliotecario):
+    """Al devolver se notifica al primero de la lista de espera (D-19)."""
     u, primero, segundo = make_user(), make_user(), make_user()
     libro, pid = _loan_for(u, ejemplares=1)
     sql("INSERT INTO lista_espera(id_usuario,id_libro,posicion) VALUES (%s,%s,2)", (segundo["id_usuario"], libro["id_libro"]))
@@ -346,6 +386,7 @@ def test_devolucion_notifica_al_primero_en_espera(bibliotecario):
 
 # ------------------------------------------------------------------ listados
 def test_listado_filtros_y_detalle(bibliotecario):
+    """Listado con filtros (estado, q, matrícula) y detalle con renovaciones y adeudos."""
     u = make_user()
     _, pa = _loan_for(u)
     _, pv = _loan_for(u)
@@ -368,12 +409,14 @@ def test_listado_filtros_y_detalle(bibliotecario):
 
 
 def test_demo_sembrada_vencido_segun_d24(bibliotecario):
+    """Los datos demo marcan 'vencido' según la definición única D-24."""
     r = bibliotecario.get("/api/prestamos?estado=vencido&matricula=A0512980")
     assert r.status_code == 200 and all(p["estado"] == "vencido" for p in r.get_json())
 
 
 # ------------------------------------------------------------------ politicas
 def test_politicas_get_y_put(admin, bibliotecario):
+    """GET lista políticas; PUT (solo admin, 403 al bibliotecario) las edita, audita y valida rangos (400) y existencia (404)."""
     pols = {p["rol"]: p for p in admin.get("/api/politicas").get_json()}
     alumno = pols["alumno"]
     assert alumno["dias_prestamo"] == 5 and alumno["max_libros"] == 2 and alumno["activa"] is True

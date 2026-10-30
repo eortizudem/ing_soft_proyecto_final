@@ -1,3 +1,4 @@
+"""Fixtures globales de pytest: app, limpieza de datos de la sesion y clientes autenticados por rol semilla."""
 import pytest
 
 from app import create_app
@@ -13,11 +14,13 @@ _TABLAS = [("mensaje", "id_mensaje"), ("conversacion", "id_conversacion"), ("lis
 
 @pytest.fixture(scope="session")
 def app():
+    """Aplicacion Flask unica para toda la sesion de pruebas."""
     return create_app()
 
 
 @pytest.fixture(scope="session", autouse=True)
 def limpiar_datos(app):
+    """Al terminar la sesion borra las filas creadas por las pruebas (id mayor al maximo previo en cada tabla)."""
     snap = {t: sql(f"SELECT COALESCE(max({pk}),0) AS m FROM {t}")[0]["m"] for t, pk in _TABLAS}
     yield
     for t, pk in _TABLAS:
@@ -26,6 +29,7 @@ def limpiar_datos(app):
 
 @pytest.fixture
 def anon(app):
+    """Cliente sin sesion iniciada."""
     return app.test_client()
 
 
@@ -39,6 +43,7 @@ def _cliente(nombre, matricula, password):
     """Declara el fixture `nombre` (cliente ya autenticado con esas credenciales semilla)."""
     @pytest.fixture(name=nombre)
     def fixture(login_as):
+        """Cliente autenticado con las credenciales semilla del rol."""
         return login_as(matricula, password)
     return fixture
 

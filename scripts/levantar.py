@@ -1,7 +1,20 @@
 #!/usr/bin/env python3
 """Levanta LibriGest (Biblioteca Ducky) con Docker Compose.
 
-Uso: python scripts/levantar.py [--no-build] [--logs] [--down]
+Uso:
+  python scripts/levantar.py              # build + up -d, espera /api/health y muestra las cuentas demo
+  python scripts/levantar.py --no-build   # igual, sin reconstruir la imagen
+  python scripts/levantar.py --logs       # tras levantar, sigue los logs del servicio web (Ctrl+C sale)
+  python scripts/levantar.py --down       # detiene y elimina los contenedores (el volumen pgdata se conserva)
+
+Pasos: verifica docker / compose v2 / demonio; crea .env desde .env.example si no existe; ejecuta
+`docker compose up -d [--build]`; sondea http://localhost:8000/api/health hasta 90 s; imprime URL y credenciales.
+
+Codigos de salida: 0 correcto; 1 error (docker ausente, demonio caido, falta .env.example, fallo de compose o
+la API no respondio a tiempo); con --down o `up` fallido se propaga el codigo de docker compose.
+
+Seguridad: no pide confirmacion y no borra datos (--down no usa -v). Las credenciales impresas son
+solo de demostracion; cambiar SECRET_KEY en .env fuera de desarrollo.
 """
 import argparse
 import json
@@ -28,15 +41,38 @@ CREDENCIALES = [
 
 
 def salir(msg, codigo=1):
+    """Imprime `ERROR: msg` en stderr y termina el proceso.
+
+    Args:
+        msg: mensaje de error.
+        codigo: codigo de salida (1 por defecto).
+
+    Raises:
+        SystemExit: siempre.
+    """
     print(f"ERROR: {msg}", file=sys.stderr)
     sys.exit(codigo)
 
 
 def correr(args, **kw):
+    """Ejecuta un comando con cwd en la raiz del proyecto.
+
+    Args:
+        args: lista de argumentos del comando.
+        **kw: opciones de `subprocess.run`.
+
+    Returns:
+        subprocess.CompletedProcess.
+    """
     return subprocess.run(args, cwd=RAIZ, **kw)
 
 
 def verificar_docker():
+    """Comprueba que docker, el plugin compose v2 y el demonio esten disponibles.
+
+    Raises:
+        SystemExit: con un mensaje orientado al usuario si falta alguno (via `salir`).
+    """
     if not shutil.which("docker"):
         salir("No se encontró 'docker'. Instala Docker Desktop o Docker Engine: https://docs.docker.com/get-docker/")
     if correr(["docker", "compose", "version"], capture_output=True).returncode != 0:
@@ -46,6 +82,11 @@ def verificar_docker():
 
 
 def preparar_env():
+    """Crea `.env` copiando `.env.example` si aun no existe.
+
+    Raises:
+        SystemExit: si no existen ni `.env` ni `.env.example`.
+    """
     env, ejemplo = RAIZ / ".env", RAIZ / ".env.example"
     if not env.exists():
         if not ejemplo.exists():
@@ -55,6 +96,11 @@ def preparar_env():
 
 
 def salud_ok():
+    """Consulta GET /api/health.
+
+    Returns:
+        True si responde JSON con `ok: true`; False ante cualquier error de red o respuesta distinta.
+    """
     try:
         with urllib.request.urlopen(f"{URL}/api/health", timeout=3) as r:
             return json.load(r).get("ok") is True
@@ -63,6 +109,14 @@ def salud_ok():
 
 
 def esperar_salud(timeout=90):
+    """Sondea /api/health cada 2 s hasta que responda o venza el plazo.
+
+    Args:
+        timeout: segundos maximos de espera.
+
+    Raises:
+        SystemExit: si la API no responde dentro de `timeout`.
+    """
     print(f"Esperando a que la API responda en {URL}/api/health ", end="", flush=True)
     fin = time.time() + timeout
     while time.time() < fin:
@@ -76,6 +130,11 @@ def esperar_salud(timeout=90):
 
 
 def main():
+    """Punto de entrada: interpreta las opciones y levanta (o detiene con --down) el stack.
+
+    Returns:
+        None. Termina con `sys.exit` ante errores (ver codigos de salida en el docstring del modulo).
+    """
     ap = argparse.ArgumentParser(description="Levanta LibriGest con Docker Compose.")
     ap.add_argument("--no-build", action="store_true", help="no reconstruir la imagen")
     ap.add_argument("--logs", action="store_true", help="seguir los logs después de levantar")

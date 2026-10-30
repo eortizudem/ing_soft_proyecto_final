@@ -14,11 +14,12 @@ ORIGENES = ("servidor", "cliente")
 # Limite contra inundacion (el endpoint del navegador es publico): por origen de red y global.
 POR_CLIENTE = (5, 60)    # 5 errores por minuto por IP
 GLOBAL = (60, 60)        # 60 errores por minuto en total
-_recientes = {}
+_recientes = {}   # clave -> marcas de tiempo (monotonic) dentro de la ventana
 _cerrojo = threading.Lock()
 
 
 def _permitido(clave, limite, ahora):
+    """Ventana deslizante: True (y registra la marca) si `clave` no supero `limite` = (maximo, segundos)."""
     maximo, ventana = limite
     marcas = [t for t in _recientes.get(clave, ()) if ahora - t < ventana]
     if len(marcas) >= maximo:
@@ -39,6 +40,7 @@ def dentro_del_limite(cliente, ahora=None):
 
 
 def reiniciar_limites():
+    """Vacia los contadores del limitador (uso en pruebas)."""
     with _cerrojo:
         _recientes.clear()
 

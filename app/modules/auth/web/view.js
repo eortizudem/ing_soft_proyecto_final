@@ -1,8 +1,13 @@
-// Login screens (pure HTML).
+/** @module modules/auth/view — pantallas de acceso (login, recuperar, nueva contraseña); HTML puro. */
 import { html } from '/js/core/ui.js';
 import { page, brand, btn, formView, formActions, submitButton, notice } from '/js/components/index.js';
 import { DEMO_ACCOUNTS } from './model.js';
 
+/**
+ * Marco común de las pantallas de acceso: identidad institucional y contenedor `#main`.
+ * @param {object} content - contenido de la pantalla.
+ * @returns {object} HTML de la pantalla completa.
+ */
 function frame(content) {
   return html`<div class="login">
     <section class="identity">${brand()}<h1>Tu biblioteca,<br>más cerca.</h1>
@@ -11,11 +16,24 @@ function frame(content) {
     <main id="main" class="login-content" tabindex="-1"><div class="page">${content}</div></main></div>`;
 }
 
+/**
+ * Formulario de acceso con botón de regreso y de envío.
+ * @param {string} id - id del formulario.
+ * @param {Array<object>} fields - definición de campos.
+ * @param {object} back - botón izquierdo (volver u olvidé contraseña).
+ * @param {string} submit - texto del botón de envío.
+ * @returns {object} formulario.
+ */
 const authForm = (id, fields, back, submit) => formView({
   id, fields, card: false, grid: false, stars: false,
   actions: [back, submitButton(submit)],
 });
 
+/**
+ * Pantalla de inicio de sesión: formulario, acceso como visitante y botones de cuentas demo.
+ * @param {{matricula?: string, notice?: string}} [datos] - matrícula a precargar y mensaje de éxito opcional.
+ * @returns {object} pantalla.
+ */
 export const login = ({ matricula = '', notice: message = '' } = {}) => frame(page({
   title: 'Bienvenido a LibriGest',
   desc: 'Accede con tu cuenta institucional.',
@@ -32,8 +50,16 @@ export const login = ({ matricula = '', notice: message = '' } = {}) => frame(pa
     <p class="footnote tiny">Selecciona un perfil para completar las credenciales.</p></section>`,
 }));
 
+/**
+ * Botón "Volver al inicio de sesión" (acción `back`).
+ * @type {object}
+ */
 const back = btn({ label: 'Volver al inicio de sesión', action: 'back', variant: 'link' });
 
+/**
+ * Pantalla para solicitar la recuperación con el correo institucional.
+ * @returns {object} pantalla.
+ */
 export const forgot = () => frame(page({
   title: 'Recuperar contraseña',
   desc: 'Escribe el correo institucional de tu cuenta.',
@@ -42,6 +68,11 @@ export const forgot = () => frame(page({
   ], back, 'Enviar instrucciones'),
 }));
 
+/**
+ * Pantalla para capturar el código y la nueva contraseña.
+ * @param {{token?: string, hasToken?: boolean}} [datos] - código a mostrar y precargar (solo en modo demostración).
+ * @returns {object} pantalla.
+ */
 export const reset = ({ token = '', hasToken = false } = {}) => frame(page({
   title: 'Nueva contraseña',
   desc: hasToken

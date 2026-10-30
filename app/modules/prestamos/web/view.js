@@ -1,4 +1,6 @@
-// Prestamos HTML (pure functions: data -> components).
+/**
+ * @module modules/prestamos/view — HTML de préstamos, recibo y políticas (funciones puras: datos -> componentes; capa view).
+ */
 import { html } from '/js/core/ui.js';
 import { LIST_LIMIT } from '/js/core/api.js';
 import { page, btn, toolbar, resultsPanel, dataTable, statusBadge, formView, submitButton, detailView, receiptBlock,
@@ -6,6 +8,12 @@ import { page, btn, toolbar, resultsPanel, dataTable, statusBadge, formView, sub
 
 
 // ---------------------------------------------------------------- lista
+/**
+ * Página del listado de préstamos con barra de búsqueda y filtro de estado.
+ * @param {{q: string, estado: string}} filters - Filtros actuales.
+ * @param {boolean} canPolicies - Si el usuario puede ver el enlace a políticas (permiso `perfiles`).
+ * @returns {Safe} Página con panel de resultados vacío.
+ */
 export const listPage = (filters, canPolicies) => page({
   title: 'Préstamos y devoluciones',
   desc: 'Registra préstamos, renovaciones y devoluciones de la biblioteca.',
@@ -16,8 +24,18 @@ export const listPage = (filters, canPolicies) => page({
   })}${resultsPanel()}`,
 });
 
+/**
+ * Texto del contador del listado.
+ * @param {Array<Object>} items - Préstamos cargados (con `estado`).
+ * @returns {string} Total y número de vencidos.
+ */
 export const summary = (items) => count(items.length, undefined, LIST_LIMIT) + ` · ${items.filter((p) => p.estado === 'vencido').length} vencido(s)`;
 
+/**
+ * Tabla de préstamos con acciones Ver/Renovar/Devolver (las dos últimas solo si está abierto).
+ * @param {Array<Object>} items - Préstamos con `folio`, `usuario`, `libro`, `numero_copia`, `fecha_vencimiento`, `estado`, `multa_estimada`, `fecha_devolucion`, `id_prestamo`.
+ * @returns {Safe} Tabla HTML.
+ */
 export const rows = (items) => dataTable({
   rows: items,
   empty: { text: 'Prueba otra búsqueda o cambia el estado.' },
@@ -34,6 +52,10 @@ export const rows = (items) => dataTable({
 });
 
 // ---------------------------------------------------------------- nuevo
+/**
+ * Página del formulario de nuevo préstamo (matrícula, clave, canales del recibo) con zona de validación.
+ * @returns {Safe} Página.
+ */
 export const form = () => page({
   title: 'Nuevo préstamo',
   desc: 'Escribe la matrícula y la clave del libro: se validan las reglas antes de confirmar.',
@@ -50,6 +72,12 @@ export const form = () => page({
   }),
 });
 
+/**
+ * Resultado de validar RN-01: motivos de rechazo (con enlace a lista de espera si no hay copias) o resumen de autorización.
+ * @param {?Object} r - Respuesta de `model.validar` (`autorizado`, `motivos`, `usuario`, `libro`, `dias_prestamo`, `fecha_vencimiento_estimada`).
+ * @param {{matricula: string, clave: string}} values - Valores escritos, usados en el enlace a espera.
+ * @returns {Safe|string} Aviso HTML, o cadena vacía si no hay respuesta.
+ */
 export const validacion = (r, { matricula, clave }) => {
   if (!r) return '';
   const lista = html`<ul>${r.motivos.map((m) => html`<li>${m.mensaje}</li>`)}</ul>`;
@@ -67,6 +95,11 @@ export const validacion = (r, { matricula, clave }) => {
 };
 
 // ---------------------------------------------------------------- detalle y recibo
+/**
+ * Pares etiqueta/valor del recibo de préstamo.
+ * @param {Object} r - Recibo (`usuario`, `libro`, fechas, `dias_prestamo`, `politica`, `notificaciones`).
+ * @returns {Array<Array>} Lista de `[etiqueta, valor]`.
+ */
 const receiptItems = (r) => [
   ['Usuario', person(r.usuario)],
   ['Perfil', roleName({}, r.usuario.rol)],
@@ -81,12 +114,24 @@ const receiptItems = (r) => [
   ['Avisos enviados', r.notificaciones.map((n) => `${label('canal', n.canal)} (${datetime(n.fecha)})`).join(', ') || 'Ninguno'],
 ];
 
+/**
+ * Líneas de texto del recibo para el PDF.
+ * @param {Object} r - Recibo (ver `receiptItems`).
+ * @returns {Array<string>} Líneas del documento.
+ */
 export const receiptLines = (r) => [
   'BIBLIOTECA DUCKY - RECIBO DE PRESTAMO', r.folio, '',
   ...receiptItems(r).map(([k, v]) => `${k}: ${v}`), '',
   'Devuelve el libro en la fecha de vencimiento para evitar multas.',
 ];
 
+/**
+ * Página de detalle del préstamo con acciones y bloque de recibo.
+ * @param {Object} p - Préstamo con renovaciones y adeudos (`folio`, `libro`, `usuario`, `estado`, fechas, `num_renovaciones`, `max_renovaciones`, `dias_retraso`, `multa_estimada`, `renovaciones`, `adeudos`).
+ * @param {Object} r - Recibo del préstamo.
+ * @param {boolean} [canAdeudos=false] - Si se muestran los botones de pérdida y daño (permiso `adeudos`).
+ * @returns {Safe} Página.
+ */
 export const detail = (p, r, canAdeudos = false) => {
   const abierto = !p.fecha_devolucion;
   return page({
@@ -123,6 +168,11 @@ export const detail = (p, r, canAdeudos = false) => {
 };
 
 // ---------------------------------------------------------------- politicas
+/**
+ * Tabla de políticas de préstamo por perfil.
+ * @param {Array<Object>} items - Políticas (`rol`, `dias_prestamo`, `max_libros`, `max_renovaciones`, `multa_diaria`, `activa`, `id_politica`).
+ * @returns {Safe} Página.
+ */
 export const policiesPage = (items) => page({
   title: 'Políticas de préstamo',
   desc: 'Días hábiles de préstamo, límites y multa por perfil. Los préstamos ya creados conservan su política.',
@@ -142,6 +192,11 @@ export const policiesPage = (items) => page({
   })}</section>`,
 });
 
+/**
+ * Formulario de edición de una política.
+ * @param {Object} p - Política (`rol`, `dias_prestamo`, `max_libros`, `max_renovaciones`, `multa_diaria`).
+ * @returns {Safe} Página.
+ */
 export const policyForm = (p) => page({
   title: `Política de ${roleName({}, p.rol)}`,
   desc: 'Los campos marcados con * son obligatorios.',

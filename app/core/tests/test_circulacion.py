@@ -1,3 +1,4 @@
+"""Pruebas de reglas de circulacion (RN-01..RN-06, D-24): reglas puras y autorizacion con contexto de BD."""
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 
@@ -13,12 +14,14 @@ OK = dict(usuario_activo=True, politica=POL, prestamos_abiertos=0, vencidos=0, a
 
 
 def codigos(**over):
+    """Codigos de motivo de `evaluar_prestamo` sobre el contexto base `OK` modificado con `over`."""
     return [m["codigo"] for m in c.evaluar_prestamo(**{**OK, **over})]
 
 
 # ---- reglas puras ----
 
 def test_vencimiento_dias_habiles():
+    """El vencimiento cuenta dias habiles desde el prestamo (lunes, viernes, sabado y politica docente)."""
     assert c.fecha_vencimiento(date(2026, 10, 26), 5) == date(2026, 11, 2)       # lunes + 5 habiles
     assert c.fecha_vencimiento(date(2026, 10, 30), 5) == date(2026, 11, 6)       # viernes
     assert c.fecha_vencimiento(date(2026, 10, 31), 5) == date(2026, 11, 6)       # sabado
@@ -26,6 +29,7 @@ def test_vencimiento_dias_habiles():
 
 
 def test_retraso_y_multa():
+    """Los dias de retraso son habiles y la multa es dias x tarifa sin tope; devolver el dia de vencimiento no genera multa."""
     venc = date(2026, 10, 30)                                                     # viernes
     assert c.dias_retraso(venc, venc) == 0
     assert c.dias_retraso(venc, date(2026, 11, 2)) == 1                           # lunes: 1 dia
@@ -36,6 +40,7 @@ def test_retraso_y_multa():
 
 
 def test_vencido_d24():
+    """Vencido solo si no hay devolucion y el vencimiento es anterior a hoy (D-24)."""
     hoy = date(2026, 10, 27)
     assert c.esta_vencido(date(2026, 10, 26), None, hoy) is True
     assert c.esta_vencido(date(2026, 10, 27), None, hoy) is False                 # el dia de vencimiento no es vencido
@@ -43,6 +48,7 @@ def test_vencido_d24():
 
 
 def test_prestamo_autorizado_y_cada_regla():
+    """Cada regla de RN-01 produce su codigo de motivo y se acumulan cuando fallan varias."""
     assert codigos() == []
     assert codigos(usuario_activo=False) == ["USUARIO_INACTIVO"]
     assert codigos(politica=None) == ["SIN_POLITICA"]
@@ -61,6 +67,7 @@ def test_prestamo_autorizado_y_cada_regla():
 
 
 def test_prestamo_reservado_por_espera():
+    """Los ejemplares reservados por la lista de espera solo los puede prestar quien fue notificado (D-19)."""
     assert codigos(disponibles=1, reservados=1) == ["LIBRO_RESERVADO_OTRO_USUARIO"]
     assert codigos(disponibles=1, reservados=1, usuario_notificado=True) == []
     assert codigos(disponibles=2, reservados=1) == []
@@ -71,10 +78,12 @@ REN = dict(abierto=True, vencido=False, num_renovaciones=0, max_renovaciones=2, 
 
 
 def cod_ren(**over):
+    """Codigos de motivo de `evaluar_renovacion` sobre el contexto base `REN` modificado con `over`."""
     return [m["codigo"] for m in c.evaluar_renovacion(**{**REN, **over})]
 
 
 def test_renovacion():
+    """Reglas de renovacion: maximo, vencido, adeudos, lista de espera y prestamo cerrado; la nueva fecha parte del vencimiento actual."""
     assert cod_ren() == [] and cod_ren(num_renovaciones=1) == []
     assert cod_ren(num_renovaciones=2) == ["MAX_RENOVACIONES"]
     assert cod_ren(num_renovaciones=2, max_renovaciones=3) == []
@@ -86,12 +95,14 @@ def test_renovacion():
 
 
 def test_limite_reserva(app):
+    """El limite de reserva es fin del dia tras los dias habiles de espera configurados."""
     with app.app_context():
         assert c.limite_reserva(date(2026, 10, 30)) == datetime(2026, 11, 3, 23, 59, 59)   # viernes + 2 habiles
         assert c.limite_reserva(date(2026, 10, 26)) == datetime(2026, 10, 28, 23, 59, 59)
 
 
 def test_reposicion_y_danio():
+    """Valor de reposicion en MXN con redondeo mitad hacia arriba y monto de dano acotado a 10-100 %."""
     assert c.valor_reposicion_mxn("45.50", "18.00") == Decimal("819.00")
     assert c.valor_reposicion_mxn(10.005, 18.5) == Decimal("185.09")               # mitad hacia arriba
     assert c.monto_danio(Decimal("819.00")) == Decimal("409.50")
@@ -103,6 +114,7 @@ def test_reposicion_y_danio():
 
 
 def test_exigir_422_con_motivos():
+    """`exigir` no hace nada sin motivos y con motivos responde 422 con `{error, motivos}`."""
     exigir([])
     with pytest.raises(ApiError) as e:
         exigir(c.evaluar_prestamo(**{**OK, "disponibles": 0}))
@@ -117,6 +129,7 @@ def test_exigir_422_con_motivos():
 # ---- contexto desde la BD ----
 
 def test_autorizar_prestamo_bd(app):
+    """Un usuario sin bloqueos queda autorizado con politica, dias y vencimiento estimado correctos."""
     u, libro = make_user(), make_book(ejemplares=1)
     with app.app_context():
         r = c.autorizar_prestamo(u["id_usuario"], libro["id_libro"])
@@ -129,6 +142,7 @@ def test_autorizar_prestamo_bd(app):
 
 
 def test_autorizar_prestamo_bloqueos_bd(app):
+    """Adeudos pendientes y prestamos vencidos reales en BD bloquean el prestamo y suspenden al usuario; al saldarlos se autoriza."""
     u, a, b = make_user(), make_book(ejemplares=2), make_book(ejemplares=1)
     pid = make_loan(u["id_usuario"], a["id_libro"])
     sql("UPDATE prestamo SET fecha_vencimiento=CURRENT_DATE-1 WHERE id_prestamo=%s", (pid,))
@@ -144,6 +158,7 @@ def test_autorizar_prestamo_bloqueos_bd(app):
 
 
 def test_autorizar_prestamo_reservado_bd(app):
+    """Un ejemplar reservado a otro usuario en espera se rechaza, pero se autoriza a quien fue notificado."""
     u, w, libro = make_user(), make_user(), make_book(ejemplares=1)
     sql("INSERT INTO lista_espera(id_usuario,id_libro,estado,fecha_notificacion,fecha_limite_recoger) "
         "VALUES (%s,%s,'notificado',now(),now()+interval '2 days')", (w["id_usuario"], libro["id_libro"]))
@@ -156,6 +171,7 @@ def test_autorizar_prestamo_reservado_bd(app):
 
 
 def test_autorizar_renovacion_bd(app):
+    """Autorizar renovacion sobre un prestamo real calcula motivos, nueva fecha y retraso."""
     u, libro = make_user(), make_book(ejemplares=1)
     pid = make_loan(u["id_usuario"], libro["id_libro"])
     with app.app_context():
@@ -173,6 +189,7 @@ def test_autorizar_renovacion_bd(app):
 
 
 def test_valor_reposicion_bd(app):
+    """El valor de reposicion usa la ultima compra recibida o, si no hay, el precio de referencia."""
     u, libro = make_user(rol="comprador"), make_book(precio_referencia=20)
     with app.app_context():
         r = c.valor_reposicion(libro["id_libro"])

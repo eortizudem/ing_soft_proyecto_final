@@ -1,3 +1,4 @@
+"""Configuracion de la aplicacion leida de variables de entorno (BD, sesion, parametros de negocio)."""
 import os
 
 
@@ -12,6 +13,10 @@ _HTTPS = _bandera("HTTPS", False)
 
 
 class Config:
+    """Valores de configuracion de Flask; cada uno se puede sobrescribir con su variable de entorno.
+
+    `PERMANENT_SESSION_LIFETIME` esta en segundos (12 horas).
+    """
     DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://librigest:librigest@localhost:5432/librigest")
     SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-change-me")
     SESSION_COOKIE_HTTPONLY = True

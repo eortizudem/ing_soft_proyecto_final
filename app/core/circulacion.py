@@ -40,10 +40,12 @@ LISTA_ESPERA = "LISTA_ESPERA"
 
 
 def _hoy(hoy):
+    """`hoy` o la fecha actual si es None."""
     return hoy or date.today()
 
 
 def _dia(x):
+    """Normaliza datetime a date."""
     return x.date() if isinstance(x, datetime) else x
 
 

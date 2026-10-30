@@ -1,3 +1,4 @@
+"""Pruebas de ayudas varias del core: serializadores, http, blueprints, permisos, `toggle_estado` y `@audit`."""
 from datetime import date, datetime
 from decimal import Decimal
 
@@ -16,6 +17,7 @@ from app.testing import make_user, sql
 # ---- serializers ----
 
 def test_to_json_recursive():
+    """`to_json` convierte fechas y Decimal dentro de estructuras anidadas."""
     row = {"d": date(2026, 1, 2), "t": datetime(2026, 1, 2, 3, 4, 5), "m": Decimal("10.50"),
            "l": [{"x": Decimal(1)}, (date(2020, 2, 2),)], "s": "a", "n": None, "b": True}
     assert to_json(row) == {"d": "2026-01-02", "t": "2026-01-02T03:04:05", "m": 10.5,
@@ -24,6 +26,7 @@ def test_to_json_recursive():
 
 
 def test_nest():
+    """`nest` mueve campos a un sub-diccionario sin mutar la fila original y respeta None."""
     assert nest({"a": 1, "x": 2, "y": 3}, "sub", ("x", "y")) == {"a": 1, "sub": {"x": 2, "y": 3}}
     assert nest(None, "sub", ("x",)) is None
     r = {"x": 1}
@@ -32,6 +35,7 @@ def test_nest():
 
 
 def _mini_app():
+    """App Flask minima con rutas que ejercitan `JSONProvider` y las ayudas de `core.http`."""
     app = Flask(__name__)
     app.json = JSONProvider(app)
 
@@ -67,12 +71,14 @@ def _mini_app():
 
 
 def test_json_provider_returns_rows_directly():
+    """Las vistas devuelven filas con date/Decimal y salen serializadas, sin escapar caracteres no ASCII."""
     r = _mini_app().test_client().get("/rows")
     assert r.get_json() == [{"d": "2026-01-02", "m": 2.5, "ñ": "á"}]
     assert "á" in r.get_data(as_text=True)  # ensure_ascii desactivado
 
 
 def test_http_body_ok_created_query():
+    """`body`, `ok`, `created` y `query_args` se comportan segun su contrato (strict, extra, tipado)."""
     c = _mini_app().test_client()
     r = c.post("/echo", json={"a": 1})
     assert (r.status_code, r.get_json()) == (201, {"a": 1})
@@ -89,6 +95,7 @@ def test_http_body_ok_created_query():
 
 
 def test_make_blueprint_name_and_static():
+    """`make_blueprint` nombra el blueprint por el modulo y sirve estaticos en /m/<modulo>."""
     bp = make_blueprint("app.modules.demo")
     assert bp.name == "demo" and bp.url_prefix is None and bp.static_url_path == "/m/demo"
 
@@ -96,6 +103,7 @@ def test_make_blueprint_name_and_static():
 # ---- auth helpers ----
 
 def test_require_permission(app):
+    """`require_permission` lanza 403 sin el permiso y devuelve el usuario si lo tiene."""
     with app.test_request_context():
         with pytest.raises(ApiError) as e:
             auth.require_permission("x", {"permisos": []})
@@ -106,6 +114,7 @@ def test_require_permission(app):
 # ---- toggle_estado ----
 
 def test_toggle_estado_guard_extra_and_result(app):
+    """`toggle_estado` alterna el estado, aplica columnas extra, respeta la guarda y lanza 404 si no existe."""
     u = make_user()
     seen = []
 
@@ -143,6 +152,7 @@ def test_toggle_estado_guard_extra_and_result(app):
 # ---- audit ----
 
 def test_audit_logs_only_on_success(app):
+    """`@audit` registra en bitacora solo si la funcion termina sin error y hay actor con id."""
     admin_id = sql("SELECT id_usuario FROM usuario WHERE matricula='ADM001'")[0]["id_usuario"]
     actor = {"id_usuario": admin_id}
 

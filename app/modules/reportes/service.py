@@ -1,3 +1,23 @@
+"""Capa servicio de reportes: reglas de negocio y armado de reportes tabulares.
+
+Cada reporte devuelve `columnas` y `filas`; el formato (pantalla/pdf/impresión) solo se registra y lo renderiza
+el cliente. Cada generación queda en `reporte_generado` y en bitácora.
+
+Tipos de reporte (`TIPOS`), permisos y filtros:
+  - catalogo_completo / catalogo_activo: Clave, Título, Autor, Tema, Ejemplares, Disponibles, Estado. Sin filtros. Permiso: `reportes`.
+  - usuarios: Matrícula, Nombre, Correo, Perfil, Estado. Permisos: `reportes` + `usuarios`.
+  - con_adeudos (RF-28): Matrícula, Nombre, Correo, Libros vencidos, Días de retraso, Adeudo pendiente (MXN), Suspendido.
+    Filtro: incluir_docentes. Permisos: `reportes` + `prestamos`.
+  - inventario_estante (RF-16): Clave, Título, Ubicación, Ejemplares, Disponibles, Prestados, Bajas, Conteo físico.
+    Filtros: planta, pasillo, librero, tema. Permiso: `reportes`.
+  - prestamos_vencidos: Matrícula, Usuario, Libro, Copia, Préstamo, Vencimiento, Días de retraso, Multa estimada (MXN).
+    Sin filtros. Permisos: `reportes` + `prestamos`.
+  - prestamos: Folio, Matrícula, Usuario, Libro, Copia, Préstamo, Vencimiento, Devolución, Renovaciones, Estado.
+    Filtros: desde, hasta (fecha de préstamo). Permisos: `reportes` + `prestamos`.
+  - indicadores (PS-MET-02/03, CTX-03): Área, Indicador, Valor, Detalle. Filtros: desde, hasta. Permiso: `reportes`.
+  - errores (PS-S3-06): Fecha, Origen, Usuario, Detalle. Filtros: desde, hasta. Permiso: `reportes`.
+"""
+
 from datetime import date
 
 from app.core import circulacion, notificaciones
@@ -26,11 +46,26 @@ ROLES_CON_ADEUDOS = ("alumno",)
 
 
 def _dia(v):
+    """Formatea una fecha como ISO (AAAA-MM-DD) o cadena vacía.
+
+    Args:
+        v (date | None): Fecha.
+
+    Returns:
+        str: Fecha ISO o ''.
+    """
     return v.isoformat() if v else ""
 
 
 def con_adeudos(incluir_docentes=False):
-    """RF-28/D-09: usuarios con préstamo vencido (D-24) o adeudo pendiente. Días de retraso = hábiles (D-03)."""
+    """RF-28/D-09: usuarios con préstamo vencido (D-24) o adeudo pendiente. Días de retraso = hábiles (D-03).
+
+    Args:
+        incluir_docentes (bool): Si es True, incluye también docentes (por defecto solo alumnos).
+
+    Returns:
+        list[dict]: Usuarios con vencidos, adeudos, monto y `dias` de retraso acumulados.
+    """
     dias = {}
     for p in model.prestamos_vencidos():
         dias[p["id_usuario"]] = dias.get(p["id_usuario"], 0) + circulacion.dias_retraso(p["fecha_vencimiento"], date.today())
@@ -39,11 +74,28 @@ def con_adeudos(incluir_docentes=False):
 
 
 def _pct(parte, total):
+    """Porcentaje con un decimal ('12.5 %') o '—' si el total es cero.
+
+    Args:
+        parte (int | float): Numerador.
+        total (int | float): Denominador.
+
+    Returns:
+        str: Porcentaje formateado.
+    """
     return f"{round(100 * parte / total, 1)} %" if total else "—"
 
 
 def indicadores(desde=None, hasta=None):
-    """PS-MET-02/03 y CTX-03: indicadores operativos como filas [indicador, valor, detalle]."""
+    """PS-MET-02/03 y CTX-03: indicadores operativos como filas [indicador, valor, detalle].
+
+    Args:
+        desde (date | None): Inicio del periodo para duración de préstamos y préstamos por mes.
+        hasta (date | None): Fin del periodo.
+
+    Returns:
+        tuple[list[str], list[list]]: Columnas (Área, Indicador, Valor, Detalle) y filas.
+    """
     a, inv = model.indicadores_asistente(), model.indicadores_inventario()
     dur = model.duracion_prestamos(desde, hasta)
     discrepancias = inv["prestados_sin_prestamo"] + inv["disponibles_con_prestamo"]
@@ -71,7 +123,15 @@ def indicadores(desde=None, hasta=None):
 
 
 def errores(desde=None, hasta=None):
-    """PS-S3-06: errores del servidor (500) y del navegador registrados en la bitácora."""
+    """PS-S3-06: errores del servidor (500) y del navegador registrados en la bitácora.
+
+    Args:
+        desde (date | None): Fecha inicial inclusiva.
+        hasta (date | None): Fecha final inclusiva.
+
+    Returns:
+        tuple[list[str], list[list]]: Columnas (Fecha, Origen, Usuario, Detalle) y filas.
+    """
     filas = []
     for r in model.errores(desde, hasta):
         origen, resumen = errores_log.parsear(r["detalle"])
@@ -80,7 +140,15 @@ def errores(desde=None, hasta=None):
 
 
 def _tabla(tipo, f):
-    """-> (columnas, filas) de cada tipo de reporte."""
+    """-> (columnas, filas) de cada tipo de reporte.
+
+    Args:
+        tipo (str): Uno de `TIPOS` (el valor desconocido final cae en catalogo_completo/activo).
+        f (dict): Filtros validados (planta, pasillo, librero, tema, desde, hasta, incluir_docentes).
+
+    Returns:
+        tuple[list[str], list[list]]: Columnas y filas.
+    """
     if tipo == "indicadores":
         return indicadores(f["desde"], f["hasta"])
     if tipo == "errores":
@@ -125,6 +193,21 @@ def _tabla(tipo, f):
 
 
 def generar(tipo, formato, actor, filtros=None):
+    """Genera un reporte, lo registra en `reporte_generado` y en bitácora (acción `reporte`).
+
+    Args:
+        tipo (str): Uno de `TIPOS`.
+        formato (str): 'pantalla' | 'pdf' | 'impresion'.
+        actor (dict): Usuario que genera el reporte.
+        filtros (dict | None): planta, pasillo, librero, tema, desde, hasta, incluir_docentes.
+
+    Returns:
+        dict: {tipo, generado, generado_por, columnas, filas, total}.
+
+    Raises:
+        ApiError: 404 si el tipo no es válido; 400 por formato o filtros inválidos o desde > hasta;
+            403 si falta el permiso extra del tipo (`PERMISO_EXTRA`).
+    """
     tipo, formato = validate({"tipo": tipo, "formato": formato}, SCHEMA).values()
     if tipo in PERMISO_EXTRA:
         require_permission(PERMISO_EXTRA[tipo], actor)
@@ -140,7 +223,20 @@ def generar(tipo, formato, actor, filtros=None):
 
 
 def aviso_con_adeudos(actor, incluir_docentes=False):
-    """RF-28: un aviso `servicios_escolares` con las matrículas de los alumnos con adeudos (lista de avisos simulada, D-11)."""
+    """RF-28: un aviso `servicios_escolares` con las matrículas de los alumnos con adeudos (lista de avisos simulada, D-11).
+
+    Bitácora: `reporte_con_adeudos_aviso`.
+
+    Args:
+        actor (dict): Usuario que envía el aviso (requiere permiso `prestamos`).
+        incluir_docentes (bool): Incluir docentes en la lista.
+
+    Returns:
+        dict: {enviados, matriculas}.
+
+    Raises:
+        ApiError: 403 sin permiso `prestamos`; 422 si no hay usuarios con adeudos.
+    """
     require_permission("prestamos", actor)
     lista = con_adeudos(incluir_docentes)
     if not lista:

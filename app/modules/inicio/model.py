@@ -1,9 +1,16 @@
+"""Modelo de `inicio` (capa model MVC): consultas SQL agregadas para el tablero (conteos globales y estado propio)."""
+
 from app.core import repo
 from app.core.consultas import ABIERTO as _ABIERTO, VENCIDO as _VENCIDO
 
 
 def stats():
-    """Tablero del personal: conteos globales por SQL directo (vencido = D-24)."""
+    """Tablero del personal: conteos globales por SQL directo (vencido = D-24).
+
+    Returns:
+        Dict con usuarios_activos, titulos_activos, compras_pendientes, prestamos_activos, prestamos_vencidos,
+        adeudos_pendientes (monto), espera_activa y consultas_pendientes (chat escalado a bibliotecario).
+    """
     return repo.fetch_one(
         f"""SELECT (SELECT count(*) FROM usuario WHERE estado='activo')::int AS usuarios_activos,
                   (SELECT count(*) FROM libro WHERE estado='activo')::int AS titulos_activos,
@@ -20,7 +27,14 @@ def stats():
 
 
 def mio(id_usuario):
-    """Estado propio: préstamos abiertos, vencidos, adeudos pendientes (monto) y esperas activas."""
+    """Estado propio: préstamos abiertos, vencidos, adeudos pendientes (monto) y esperas activas.
+
+    Args:
+        id_usuario: Usuario consultado.
+
+    Returns:
+        Dict con prestamos_activos, prestamos_vencidos, proximo_vencimiento, adeudos_pendientes y espera_activa.
+    """
     return repo.fetch_one(
         f"""SELECT (SELECT count(*) FROM prestamo WHERE id_usuario=%(u)s AND {_ABIERTO})::int AS prestamos_activos,
                   (SELECT count(*) FROM prestamo WHERE id_usuario=%(u)s AND {_VENCIDO})::int AS prestamos_vencidos,
@@ -32,7 +46,11 @@ def mio(id_usuario):
 
 
 def usado_mes():
-    """Compras no canceladas del mes en curso (USD), misma definición que `compras.presupuesto` (D-22)."""
+    """Compras no canceladas del mes en curso (USD), misma definición que `compras.presupuesto` (D-22).
+
+    Returns:
+        Monto total estimado en USD.
+    """
     return repo.fetch_one(
         """SELECT COALESCE(sum(total_estimado), 0) AS t FROM solicitud_compra
            WHERE estado <> 'cancelada' AND date_trunc('month', fecha) = date_trunc('month', CURRENT_DATE)""")["t"]

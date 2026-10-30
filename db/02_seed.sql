@@ -1,9 +1,14 @@
--- Datos base (todo excepto usuarios, que siembra app/seed.py con hashes)
+-- Archivo 02 de db/*.sql: datos base de LibriGest (catalogos, politicas, libros demo, asistente).
+-- Se aplica despues de 01_schema.sql. Los usuarios (con hashes de contrasena) NO estan aqui: los siembra
+-- app/seed.py (python -m app.seed). scripts/recrear_db.py --sin-semilla omite este archivo.
+
+-- Roles
 INSERT INTO rol(nombre, descripcion) VALUES
   ('admin','Administrador'),('catalogo','Catálogo'),('bibliotecario','Bibliotecario'),
   ('comprador','Comprador'),('alumno','Alumno'),('docente','Docente'),('visitante','Visitante'),
   ('colaborador','Colaborador');  -- D-12: personal de apoyo (catalogo + compras), sin préstamos
 
+-- Permisos (modulos/funciones habilitables)
 INSERT INTO permiso(nombre, descripcion) VALUES
   ('inicio','Pantalla de inicio'),('usuarios','Administración de usuarios'),
   ('perfiles','Perfiles y permisos'),('catalogo','Gestión del catálogo'),
@@ -14,6 +19,7 @@ INSERT INTO permiso(nombre, descripcion) VALUES
   ('adeudos','Multas, pagos, pérdida y daño'),('asistente','Asistente virtual'),
   ('notificaciones','Avisos enviados a los usuarios');
 
+-- Matriz rol x permiso: cada rol recibe su lista; visitante/alumno/docente comparten el ELSE (basico)
 INSERT INTO rol_permiso(id_rol, id_permiso, habilitado)
 SELECT r.id_rol, p.id_permiso,
   p.nombre = ANY(CASE r.nombre
@@ -27,9 +33,11 @@ SELECT r.id_rol, p.id_permiso,
     ELSE ARRAY['inicio','buscar','asistente','diseno','guia','funciones'] END)
 FROM rol r CROSS JOIN permiso p;
 
+-- Ubicaciones fisicas de los libros demo (los libros demo usan la primera)
 INSERT INTO ubicacion(planta, pasillo, librero, nivel) VALUES
   ('Planta baja','A','03',2),('Planta baja','B','05',1),('Planta alta','C','08',3);
 
+-- Libros demo (LIB001..LIB007): uno de prestamo, consulta interna y un reservado (D-20)
 INSERT INTO libro(clave,titulo,autor,editorial,tema,anio_publicacion,tipo_uso,clasificacion,sinopsis,precio_referencia,id_ubicacion,estado)
 SELECT v.clave, v.titulo, v.autor, v.editorial, v.tema, v.anio, v.tipo, v.clasif, v.sinopsis, v.precio,
        (SELECT id_ubicacion FROM ubicacion WHERE planta='Planta baja' AND pasillo='A' AND librero='03' AND nivel=2),
@@ -51,6 +59,7 @@ FROM (VALUES
   'Libro reservado de la bibliografía de cátedra: se consulta en mostrador y no se presta.',800.00)
 ) AS v(clave,titulo,autor,editorial,tema,anio,tipo,clasif,sinopsis,precio);
 
+-- Ejemplares: numero de copias por libro segun la tabla (clave, n)
 INSERT INTO ejemplar(id_libro, numero_copia, estado, fecha_alta)
 SELECT l.id_libro, g, 'disponible', CURRENT_DATE
 FROM libro l JOIN (VALUES ('LIB001',5),('LIB002',3),('LIB003',2),('LIB004',4),('LIB005',2),('LIB006',1),('LIB007',1)) s(clave,n)
@@ -64,6 +73,7 @@ FROM rol r JOIN (VALUES ('admin',5,2,2,false),('catalogo',5,2,2,false),('bibliot
   ('comprador',5,2,2,false),('colaborador',5,2,2,false),('alumno',5,2,2,true),('docente',10,3,3,true)
   ) v(rol,dias,max_libros,renov,activa) ON v.rol = r.nombre;
 
+-- Intenciones que reconoce el asistente virtual (S3)
 INSERT INTO intencion(nombre, descripcion) VALUES
   ('saludo','El usuario saluda al asistente'),
   ('buscar_libro','Consulta de disponibilidad o búsqueda de libros'),

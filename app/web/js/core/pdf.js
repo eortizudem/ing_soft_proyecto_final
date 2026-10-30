@@ -1,7 +1,14 @@
-// Minimal hand-written PDF (Helvetica, A4, plain text lines) - no libraries.
+/** @module core/pdf — generador mínimo de PDF escrito a mano (Helvetica, A4, líneas de texto plano), sin librerías. */
+/** @type {number} Máximo de caracteres por línea antes de partirla. */
 const MAX_CHARS = 90;
+/** @type {number} Líneas por página A4. */
 const LINES_PER_PAGE = 46;
 
+/**
+ * Parte una línea larga en trozos de hasta MAX_CHARS, cortando en espacios cuando es posible.
+ * @param {string} line - Línea original.
+ * @returns {string[]} Líneas resultantes.
+ */
 function wrap(line) {
   const chunks = [];
   while (line.length > MAX_CHARS) {
@@ -14,9 +21,19 @@ function wrap(line) {
   return chunks;
 }
 
-// Escapes a line for a PDF literal string; non Latin-1 characters become "-".
+/**
+ * Escapa una línea para una cadena literal PDF; los caracteres fuera de Latin-1 se sustituyen por "-".
+ * @param {string} text - Texto original.
+ * @returns {string} Texto escapado.
+ */
 const literal = (text) => text.replace(/[^\x20-\xFF]/g, '-').replace(/[\\()]/g, '\\$&');
 
+/**
+ * Construye un PDF (estructura de objetos, xref y trailer) a partir de líneas de texto.
+ * @param {string[]} lines - Líneas de texto; se ajustan y paginan automáticamente.
+ * @returns {Blob} Blob `application/pdf`.
+ * @example const blob = buildPdf(['Comprobante', 'Libro: Dune']);
+ */
 export function buildPdf(lines) {
   const wrapped = lines.flatMap(wrap);
   const pages = [];
@@ -51,6 +68,13 @@ export function buildPdf(lines) {
   return new Blob([Uint8Array.from(pdf, (c) => c.charCodeAt(0) & 255)], { type: 'application/pdf' });
 }
 
+/**
+ * Genera el PDF y dispara su descarga en el navegador.
+ * @param {string[]} lines - Líneas de texto del documento.
+ * @param {string} filename - Nombre del archivo descargado.
+ * @returns {void}
+ * @example downloadPdf(['Reporte de multas'], 'multas.pdf');
+ */
 export function downloadPdf(lines, filename) {
   const url = URL.createObjectURL(buildPdf(lines));
   const a = document.createElement('a');

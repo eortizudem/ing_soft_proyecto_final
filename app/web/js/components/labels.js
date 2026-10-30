@@ -1,7 +1,12 @@
-// Single source of truth for enum display labels and badge tones.
-// Add a new state here and every table, badge, filter and form picks it up.
+/**
+ * @module components/labels — única fuente de verdad de las etiquetas de enumeraciones y los tonos de insignia.
+ * Al añadir un estado nuevo aquí, toda tabla, insignia, filtro y formulario lo adopta.
+ */
 
-/** label per kind/value. */
+/**
+ * Etiqueta visible por tipo y valor almacenado.
+ * @type {Object<string, Object<string,string>>}
+ */
 export const LABELS = {
   estadoUsuario: { activo: 'Activa', inactivo: 'Inactiva' },
   estadoLibro: { activo: 'Activo', inactivo: 'Inactivo' },
@@ -27,7 +32,10 @@ export const LABELS = {
   accionSync: { nuevo: 'Alta', cambio: 'Modificación', baja: 'Baja', sin_cambios: 'Sin cambios', omitido: 'Omitido' },
 };
 
-/** badge tone per kind/value: 'good' (default green) | 'warn' | 'bad'. */
+/**
+ * Tono de insignia por tipo y valor: 'good' (verde, por defecto) | 'warn' | 'bad'.
+ * @type {Object<string, Object<string,string>>}
+ */
 export const TONES = {
   estadoUsuario: { inactivo: 'bad' },
   estadoLibro: { inactivo: 'bad' },
@@ -41,13 +49,39 @@ export const TONES = {
   accionSync: { cambio: 'warn', baja: 'bad', omitido: 'bad' },
 };
 
+/**
+ * Etiqueta visible de un valor.
+ * @param {string} kind - Tipo (clave de `LABELS`).
+ * @param {string} value - Valor almacenado.
+ * @returns {string} Etiqueta, o el propio valor si no está definida (vacío si no hay valor).
+ */
 export const label = (kind, value) => LABELS[kind]?.[value] || value || '';
+/**
+ * Pares `[valor, etiqueta]` de un tipo, listos para `options()` o filtros.
+ * @param {string} kind - Tipo (clave de `LABELS`).
+ * @returns {Array<Array<string>>} Pares valor/etiqueta (vacío si el tipo no existe).
+ */
 export const labelItems = (kind) => Object.entries(LABELS[kind] || {});
+/**
+ * Tono de insignia de un valor.
+ * @param {string} kind - Tipo (clave de `TONES`).
+ * @param {string} value - Valor almacenado.
+ * @returns {string} 'good' | 'warn' | 'bad' ('good' por defecto).
+ */
 export const tone = (kind, value) => TONES[kind]?.[value] || 'good';
 
-/** Fallback role names when the API has not loaded them. */
+/**
+ * Nombres de rol de respaldo cuando la API aún no los ha cargado.
+ * @type {Object<string,string>}
+ */
 export const ROLES = {
   admin: 'Administrador', alumno: 'Alumno', docente: 'Docente', catalogo: 'Catálogo',
   comprador: 'Comprador', bibliotecario: 'Bibliotecario', visitante: 'Visitante', colaborador: 'Colaborador',
 };
+/**
+ * Nombre visible de un rol.
+ * @param {?Object<string,string>} map - Nombres cargados desde la API (puede ser nulo).
+ * @param {string} rol - Clave del rol.
+ * @returns {string} Nombre del mapa, de `ROLES` o la propia clave.
+ */
 export const roleName = (map, rol) => map?.[rol] || ROLES[rol] || rol;

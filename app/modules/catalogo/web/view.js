@@ -1,13 +1,29 @@
+/** @module modules/catalogo/view — HTML del catálogo (funciones puras: datos -> componentes) */
 // Catalog HTML (pure functions: data -> components).
 import { html } from '/js/core/ui.js';
 import { page, brand, btn, actions, toolbar, resultsPanel, resultsList, dataTable, cardList, itemCard, card, note, detailView,
   statusBadge, formView, submitButton, labelItems, label, location, count, receiptBlock, emptyState, notice, date } from '/js/components/index.js';
 import { PLANTAS, PASILLOS, range, CAMPOS } from './model.js';
 
+/**
+ * Opciones del filtro de disponibilidad.
+ * @type {Array<[string, string]>}
+ */
 const DISPONIBILIDAD = [['', 'Toda disponibilidad'], ['disponible', 'Con copias disponibles'], ['agotado', 'Sin copias disponibles']];
 
+/**
+ * Opciones del filtro de tema.
+ * @param {string[]} themes - Temas.
+ * @returns {Array} Pares [valor, etiqueta] con la opción 'Todos los temas'.
+ */
 const themeOptions = (themes) => [['', 'Todos los temas'], ...themes];
 
+/**
+ * Página de lista administrativa: barra de búsqueda con filtros y panel de resultados.
+ * @param {string[]} themes - Temas para el filtro.
+ * @param {Object} filters - Filtros vigentes (q, campo, tipo_uso, disponibilidad, tema, estado).
+ * @returns {Object} Marcado HTML.
+ */
 export const listPage = (themes, filters) => page({
   title: 'Catálogo de libros',
   desc: 'Una colección actualizada, con disponibilidad y ubicación por ejemplar.',
@@ -26,8 +42,18 @@ export const listPage = (themes, filters) => page({
   ${resultsPanel()}`,
 });
 
+/**
+ * Resumen de resultados (conteo).
+ * @param {Object[]} books - Libros listados.
+ * @returns {Object} Marcado HTML.
+ */
 export const summary = (books) => count(books.length);
 
+/**
+ * Tabla de libros (clave, título, autor, editorial, uso, disponibles/ejemplares, acciones).
+ * @param {Object[]} books - Libros con campos de `GET /api/libros`.
+ * @returns {Object} Marcado HTML.
+ */
 export const rows = (books) => dataTable({
   rows: books,
   empty: { text: 'Prueba otro título, autor, tema, clave o editorial.' },
@@ -42,6 +68,14 @@ export const rows = (books) => dataTable({
   ],
 });
 
+/**
+ * Formulario de ficha bibliográfica (alta/edición) con ubicación; avisa si se cataloga una compra recibida.
+ * @param {Object} book - Libro (o `emptyBook()`), con `ubicacion` anidada.
+ * @param {string[]} themes - Temas sugeridos.
+ * @param {boolean} editing - True al editar (la clave queda de solo lectura).
+ * @param {Object|null} [pending] - Línea de compra pendiente {folio, descripcion, cantidad_recibida}.
+ * @returns {Object} Marcado HTML.
+ */
 export function form(book, themes, editing, pending = null) {
   const u = book.ubicacion;
   return page({
@@ -74,9 +108,19 @@ export function form(book, themes, editing, pending = null) {
   });
 }
 
+/**
+ * Insignia de disponibilidad del libro (baja, disponible o agotado).
+ * @param {{estado: string, disponibles: number}} b - Libro.
+ * @returns {Object} Marcado HTML.
+ */
 export const availability = (b) => statusBadge('disponibilidad',
   b.estado === 'inactivo' ? 'baja' : b.disponibles > 0 ? 'disponible' : 'agotado');
 
+/**
+ * Fila de ejemplar: etiqueta, estado, préstamo activo, alta y acciones de baja/reactivar.
+ * @param {Object} e - Ejemplar (etiqueta, estado, motivo_baja, prestamo_activo, fecha_alta, id_ejemplar) más `activo` (libro activo).
+ * @returns {Object} Marcado HTML.
+ */
 const ejemplarRow = (e) => html`<tr>
   <td class="mono">${e.etiqueta}</td>
   <td>${statusBadge('disponibilidad', e.estado)}${e.motivo_baja ? html` ${statusBadge('motivoBaja', e.motivo_baja)}` : ''}</td>
@@ -88,6 +132,12 @@ const ejemplarRow = (e) => html`<tr>
     : e.estado === 'baja' ? btn({ label: 'Reactivar', action: 'reactivar', data: { id: e.id_ejemplar, etiqueta: e.etiqueta }, when: e.activo })
     : html`<span class="hint">Prestado: usa Multas y pagos para registrar pérdida.</span>`}</td></tr>`;
 
+/**
+ * Tarjeta con la tabla de ejemplares del libro.
+ * @param {Object[]} items - Ejemplares.
+ * @param {boolean} libroActivo - Si el libro está activo (permite reactivar).
+ * @returns {Object} Marcado HTML.
+ */
 export const ejemplaresSection = (items, libroActivo) => card({
   title: 'Ejemplares',
   body: items.length ? html`<div class="table-wrap"><table><thead><tr><th scope="col">Etiqueta</th><th scope="col">Estado</th>
@@ -97,6 +147,11 @@ export const ejemplaresSection = (items, libroActivo) => card({
 });
 
 // Printable ficha bibliográfica + ejemplar labels (printHtml / PDF).
+/**
+ * Bloque imprimible: ficha bibliográfica y etiquetas de ejemplares.
+ * @param {Object} e - Datos de `GET /api/libros/:id/etiqueta`.
+ * @returns {Object} Marcado HTML.
+ */
 export const fichaBlock = (e) => receiptBlock({
   id: 'ficha', title: 'Ficha bibliográfica', folio: e.clave,
   items: [['Título', e.titulo], ['Autor', e.autor], ['Clasificación', e.clasificacion], ['Ubicación', location(e.ubicacion)]],
@@ -106,15 +161,43 @@ export const fichaBlock = (e) => receiptBlock({
       { label: 'Clasificación', render: () => e.clasificacion }, { label: 'Ubicación', render: () => location(e.ubicacion) }] })}`,
 });
 
+/**
+ * Líneas de texto de la ficha para el PDF.
+ * @param {Object} e - Datos de `GET /api/libros/:id/etiqueta`.
+ * @returns {string[]} Líneas.
+ */
 export const pdfLines = (e) => [`Ficha bibliografica ${e.clave}`, '', `Titulo: ${e.titulo}`, `Autor: ${e.autor}`,
   `Clasificacion: ${e.clasificacion}`, `Ubicacion: ${location(e.ubicacion)}`, '', 'Etiquetas de ejemplares:',
   ...e.codigo_ejemplares.map((c) => `  ${c.etiqueta}  |  ${e.clasificacion}  |  ${location(e.ubicacion)}`)];
 
 // "Unirse a lista de espera" (package B): prestable, active, no copies, logged-in non-visitor.
+/**
+ * Indica si se ofrece unirse a lista de espera: prestable, activo, sin copias y usuario no visitante.
+ * @param {Object} b - Libro.
+ * @param {boolean} canWait - Si el usuario puede esperar.
+ * @returns {boolean}
+ */
 const canJoinQueue = (b, canWait) => !!canWait && b.disponibles === 0 && b.estado === 'activo' && b.tipo_uso === 'prestamo_externo';
+/**
+ * Botón 'Unirse a lista de espera' (visible según `canJoinQueue`).
+ * @param {Object} b - Libro.
+ * @param {boolean} canWait - Si el usuario puede esperar.
+ * @param {string} [variant] - Variante del botón.
+ * @returns {Object} Marcado HTML.
+ */
 const joinQueueBtn = (b, canWait, variant = '') =>
   btn({ label: 'Unirse a lista de espera', href: `espera/unirse/${b.id_libro}`, variant, when: canJoinQueue(b, canWait) });
 
+/**
+ * Ficha de detalle del libro con ejemplares y acciones según permisos.
+ * @param {Object} b - Libro.
+ * @param {Object} opciones - Opciones de vista.
+ * @param {boolean} opciones.canEdit - Puede editar/administrar.
+ * @param {boolean} opciones.canLocate - Puede ver ubicación.
+ * @param {boolean} [opciones.canWait] - Puede unirse a espera.
+ * @param {Object[]|null} [opciones.ejemplares] - Ejemplares (solo con permiso `catalogo`).
+ * @returns {Object} Marcado HTML.
+ */
 export const detail = (b, { canEdit, canLocate, canWait = false, ejemplares = null }) => page({
   title: 'Ficha del libro',
   desc: 'Información bibliográfica y ejemplares disponibles.',
@@ -143,6 +226,10 @@ export const detail = (b, { canEdit, canLocate, canWait = false, ejemplares = nu
   })}${ejemplares ? ejemplaresSection(ejemplares, b.estado === 'activo') : ''}`,
 });
 
+/**
+ * Página de compras recibidas pendientes de catalogar (contenedor de resultados).
+ * @returns {Object} Marcado HTML.
+ */
 export const pendientesPage = () => page({
   title: 'Pendientes de catalogar',
   desc: 'Compras recibidas que aún no tienen ficha en el catálogo.',
@@ -150,6 +237,11 @@ export const pendientesPage = () => page({
   body: html`<section class="card"><div id="results"></div></section>`,
 });
 
+/**
+ * Tabla de líneas pendientes con botón 'Catalogar'.
+ * @param {Array<{id_detalle: number, folio: string, descripcion: string, cantidad_recibida: number}>} items - Líneas pendientes.
+ * @returns {Object} Marcado HTML.
+ */
 export const pendientesRows = (items) => dataTable({
   rows: items, empty: { title: 'Todo catalogado', text: 'No hay compras recibidas pendientes de catalogar.' },
   columns: [{ label: 'Folio', key: 'folio' }, { label: 'Descripción', key: 'descripcion' },
@@ -157,6 +249,10 @@ export const pendientesRows = (items) => dataTable({
     { label: 'Acciones', render: (p) => btn({ label: 'Catalogar', href: `libros/nuevo?id_detalle=${p.id_detalle}`, variant: 'primary' }) }],
 });
 
+/**
+ * Página de importación CSV: archivo, contenido y zona de resultado.
+ * @returns {Object} Marcado HTML.
+ */
 export const importPage = () => page({
   title: 'Importar libros (CSV)',
   desc: 'Alta masiva desde un archivo CSV. Se crean las filas válidas y se informan los errores por línea.',
@@ -171,11 +267,22 @@ export const importPage = () => page({
   })}<div id="import-result" aria-live="polite"></div>`,
 });
 
+/**
+ * Resultado de importación: aviso con totales y tabla de errores por línea.
+ * @param {{creados: number, errores: Array<{linea: number, motivo: string}>}} r - Resultado de la API.
+ * @returns {Object} Marcado HTML.
+ */
 export const importResult = (r) => html`${notice({ text: `${r.creados} libro(s) creado(s); ${r.errores.length} error(es).`, tone: r.errores.length ? 'error' : 'success' })}
   ${r.errores.length ? dataTable({ rows: r.errores, columns: [{ label: 'Línea', key: 'linea' }, { label: 'Motivo', key: 'motivo' }] }) : ''}`;
 
 // ---- Public search (buscar) and floor plan ----
 
+/**
+ * Tarjetas de resultados de búsqueda pública con disponibilidad y acciones.
+ * @param {Object[]} books - Libros.
+ * @param {boolean} [canWait] - Puede unirse a espera.
+ * @returns {Object} Marcado HTML.
+ */
 export const searchResults = (books, canWait = false) => cardList({
   items: books,
   empty: { text: 'No encontramos coincidencias. Revisa los filtros o prueba otra búsqueda.' },
@@ -188,6 +295,13 @@ export const searchResults = (books, canWait = false) => cardList({
   }),
 });
 
+/**
+ * Barra de búsqueda pública.
+ * @param {string} label - Etiqueta del campo de texto.
+ * @param {Object} filters - Filtros vigentes (usa `q`).
+ * @param {Array} [extra] - Filtros adicionales.
+ * @returns {Object} Marcado HTML.
+ */
 const searchToolbar = (label, filters, extra = []) => toolbar({
   id: 'search-form',
   search: { name: 'q', label, value: filters.q, placeholder: 'Escribe para buscar' },
@@ -195,6 +309,13 @@ const searchToolbar = (label, filters, extra = []) => toolbar({
   submit: 'Buscar',
 });
 
+/**
+ * Página de búsqueda pública de escritorio.
+ * @param {string[]} themes - Temas.
+ * @param {Object} filters - Filtros vigentes.
+ * @param {boolean} [canWait] - Puede ver 'Mis solicitudes de espera'.
+ * @returns {Object} Marcado HTML.
+ */
 export const searchPage = (themes, filters, canWait = false) => page({
   title: 'Encuentra tu próximo libro',
   desc: 'Consulta el catálogo y encuentra cada libro dentro de la biblioteca.',
@@ -207,6 +328,12 @@ export const searchPage = (themes, filters, canWait = false) => page({
   ])}${resultsList()}`,
 });
 
+/**
+ * Página de búsqueda en modo móvil.
+ * @param {Object} filters - Filtros vigentes.
+ * @param {boolean} [canAssistant] - Muestra el acceso al asistente.
+ * @returns {Object} Marcado HTML.
+ */
 export const mobilePage = (filters, canAssistant = false) => html`${brand()}${page({
   title: 'Encuentra tu libro',
   desc: 'Biblioteca Ducky',
@@ -215,11 +342,22 @@ export const mobilePage = (filters, canAssistant = false) => html`${brand()}${pa
       btn({ label: 'Volver a escritorio', href: 'buscar', variant: 'link' })])}`,
 })}`;
 
+/**
+ * Esquema de 12 libreros resaltando el del libro.
+ * @param {number} selected - Número de librero a resaltar.
+ * @returns {Object[]} Marcado HTML por librero.
+ */
 const shelves = (selected) => Array.from({ length: 12 }, (_, i) => i + 1).map((n) => {
   const id = String(n).padStart(2, '0');
   return html`<div class="shelf ${n === selected ? 'selected' : ''}">${n === selected ? id + ' · TU LIBRO' : 'Librero ' + id}</div>`;
 });
 
+/**
+ * Página de ubicación física del libro (plano de libreros, ruta y disponibilidad).
+ * @param {Object} b - Libro con `ubicacion`, `clasificacion`, `disponibles`, `estado`.
+ * @param {boolean} mobile - True para la versión móvil.
+ * @returns {Object} Marcado HTML.
+ */
 export function locationPage(b, mobile) {
   const where = location(b.ubicacion);
   const stock = b.estado === 'inactivo' ? 'Este libro fue dado de baja.'

@@ -1,3 +1,7 @@
+"""Capa SERVICE de auth (reglas de negocio): login, sesion de visitante, logout y recuperacion de contrasena (RNF-01; D-11, D-26).
+
+Las contrasenas se guardan con hash werkzeug; las acciones relevantes se registran en `bitacora`.
+"""
 import secrets
 
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -20,6 +24,14 @@ CONFIRMAR = {"password": Str("contraseña", min=6, strip=False, required_msg=PWD
 
 
 def _public(row):
+    """Proyecta un usuario a su forma publica (sin hash) e incluye sus permisos.
+
+    Args:
+        row (dict): usuario con rol (de `model.find_*` o el visitante sintetico).
+
+    Returns:
+        dict: `id_usuario`, `matricula`, `nombre_completo`, `correo`, `rol`, `rol_descripcion`, `permisos`.
+    """
     return {
         "id_usuario": row["id_usuario"],
         "matricula": row["matricula"],
@@ -32,6 +44,11 @@ def _public(row):
 
 
 def _visitante():
+    """Usuario sintetico de visitante (D-26): sin `id_usuario`, matricula `VISITANTE`, solo permisos del rol `visitante`.
+
+    Returns:
+        dict: usuario publico del visitante.
+    """
     rol = model.get_rol("visitante") or {"nombre": "visitante", "descripcion": "Visitante"}
     return _public({
         "id_usuario": None, "matricula": "VISITANTE", "nombre_completo": "Visitante", "correo": None,
@@ -40,6 +57,14 @@ def _visitante():
 
 
 def user_from_session(session):
+    """Resuelve el usuario actual desde la sesion de Flask.
+
+    Args:
+        session (Mapping): sesion con `visitante` o `uid`.
+
+    Returns:
+        dict | None: usuario publico; `None` si no hay sesion o la cuenta ya no esta activa.
+    """
     if session.get("visitante"):
         return _visitante()
     uid = session.get("uid")
@@ -51,6 +76,17 @@ def user_from_session(session):
 
 
 def login(data):
+    """Inicia sesion con matricula y contrasena (RNF-01) y registra `login` en bitacora.
+
+    Args:
+        data (dict): payload `{matricula, password}`; la matricula se convierte a mayusculas.
+
+    Returns:
+        dict: usuario publico.
+
+    Raises:
+        ApiError: 401 si la matricula o contrasena es incorrecta (mismo mensaje en ambos casos); 403 si la cuenta esta inactiva.
+    """
     matricula, password = validate(data, LOGIN).values()
     row = model.find_by_matricula(matricula) if matricula else None
     if not row or not check_password_hash(row["contrasena_hash"], password):
@@ -63,17 +99,37 @@ def login(data):
 
 
 def visitante():
+    """Inicia una sesion de visitante (D-26): solo busqueda y asistente, sin consultas de estado propio.
+
+    Returns:
+        dict: usuario publico del visitante.
+    """
     core_auth.start_visitor_session()
     return _visitante()
 
 
 def logout(user):
+    """Cierra la sesion y registra `logout` en bitacora si habia un usuario autenticado.
+
+    Args:
+        user (dict | None): usuario actual (el visitante tiene `id_usuario` nulo).
+    """
     if user:
         log(user["id_usuario"], "logout", f"Cierre de sesión de {user['matricula']}")
     core_auth.end_session()
 
 
 def recuperar(data):
+    """Solicita la recuperacion de contrasena: genera un token de 30 minutos y lo envia por correo simulado (D-11).
+    Para no revelar si un correo existe, no falla cuando no hay cuenta activa.
+
+    Args:
+        data (dict): payload `{correo}`.
+
+    Returns:
+        str | None: token generado, o `None` si el correo no existe o la cuenta esta inactiva. El controller solo lo
+        expone si `DEMO_MOSTRAR_TOKEN` esta activo.
+    """
     correo = validate(data, RECUPERAR)["correo"]
     row = model.find_by_correo(correo) if correo else None
     if not row or row["estado"] != "activo":
@@ -88,6 +144,14 @@ def recuperar(data):
 
 
 def confirmar(data):
+    """Restablece la contrasena con un token vigente; el token queda usado y se registra `password_reset`.
+
+    Args:
+        data (dict): payload `{token, password (min 6 caracteres)}`.
+
+    Raises:
+        ApiError: 400 si el payload es invalido o el token no es valido, ya se uso o expiro.
+    """
     c = validate(data, CONFIRMAR)
     password = c["password"]
     t = model.find_valid_token(c["token"])

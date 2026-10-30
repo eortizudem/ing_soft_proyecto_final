@@ -1,4 +1,9 @@
-"""Reglas de adeudos: pago (D-10), cancelación (D-04), perdida (RN-04/D-07) y daño (D-08)."""
+"""Servicio de adeudos: reglas de negocio (capa service del MVC).
+
+Pago en Tesorería (D-10, RF-27), cancelación solo admin (D-04), pérdida (RN-04/D-07)
+y daño (D-08), con notificaciones simuladas (D-11) y bitácora (`@audit`).
+Errores con `ApiError` (400 validación, 403 permiso, 404, 409 conflicto).
+"""
 from datetime import date
 from decimal import Decimal
 
@@ -36,10 +41,33 @@ SCHEMA_DANIO = {"id_prestamo": Int(1, msg="Indica el préstamo."), "porcentaje":
 
 
 def listar(estado, tipo, q, matricula, limite=None):
+    """Lista adeudos con filtros.
+
+    Args:
+        estado: 'pendiente', 'pagado', 'cancelado' o vacío.
+        tipo: 'retraso', 'danio', 'perdida' o vacío.
+        q: Texto libre.
+        matricula: Matrícula exacta.
+        limite: Tope de filas opcional.
+
+    Returns:
+        list[dict]: Adeudos con `usuario` y `libro` anidados.
+    """
     return model.list_(estado, tipo, q, matricula, limite)
 
 
 def obtener(id_adeudo):
+    """Detalle de un adeudo con referencia de Tesorería y motivo de cancelación (de bitácora).
+
+    Args:
+        id_adeudo: Identificador del adeudo.
+
+    Returns:
+        dict: Adeudo con `referencia_tesoreria` y `motivo_cancelacion` (None si no aplican).
+
+    Raises:
+        ApiError: 404 si no existe.
+    """
     a = or_404(model.get(id_adeudo), NO_ENCONTRADO)
     pago = model.bitacora_de("adeudo_pago", id_adeudo)
     cond = model.bitacora_de("adeudo_cancelar", id_adeudo)
@@ -49,17 +77,45 @@ def obtener(id_adeudo):
 
 
 def tipo_cambio():
+    """Tipo de cambio USD/MXN vigente (simulado, D-28).
+
+    Returns:
+        dict: `usd_mxn`, `fuente` ('simulado') y `nota`.
+    """
     return {"usd_mxn": parametros.tipo_cambio(), "fuente": "simulado",
             "nota": "Tipo de cambio simulado (Banxico FIX); configurable con TIPO_CAMBIO_USD_MXN."}
 
 
 def reposicion(id_libro, tc=None):
+    """Valor de reposición de un libro (RN-04, D-07): última compra recibida en USD x tipo de cambio.
+
+    Args:
+        id_libro: Libro a valorar.
+        tc: Tipo de cambio opcional (Decimal); None usa el vigente.
+
+    Returns:
+        dict: Resultado de `circulacion.valor_reposicion` (`valor_usd`, `tipo_cambio`, `monto_mxn`, `fuente`).
+
+    Raises:
+        ApiError: 400 si no se indica el libro.
+    """
     if not id_libro:
         raise ApiError("Indica el libro (id_libro).")
     return circulacion.valor_reposicion(id_libro, tc)
 
 
 def _prestamo_abierto(id_prestamo):
+    """Préstamo bloqueado que aún no ha sido cerrado.
+
+    Args:
+        id_prestamo: Identificador del préstamo.
+
+    Returns:
+        dict: Datos de `model.lock_loan`.
+
+    Raises:
+        ApiError: 404 si no existe; 409 si ya está cerrado.
+    """
     p = or_404(model.lock_loan(id_prestamo), NO_PRESTAMO)
     if p["fecha_devolucion"] is not None or p["estado"] == "devuelto":
         raise ApiError("El préstamo ya está cerrado.", 409)
@@ -67,12 +123,32 @@ def _prestamo_abierto(id_prestamo):
 
 
 def _retraso(p, hoy):
+    """Días hábiles de retraso y multa de un préstamo a una fecha (RN-03, D-04).
+
+    Args:
+        p: Préstamo de `model.lock_loan`.
+        hoy: Fecha de corte.
+
+    Returns:
+        tuple[int, Decimal]: `(dias, multa)`.
+    """
     dias = circulacion.dias_retraso(p["fecha_vencimiento"], hoy)
     return dias, circulacion.multa_retraso(dias, p["multa_diaria"])
 
 
 def previsualizar(id_prestamo, args):
-    """Datos del préstamo y montos calculados (sin escribir) para confirmar pérdida o daño."""
+    """Datos del préstamo y montos calculados (sin escribir) para confirmar pérdida o daño.
+
+    Args:
+        id_prestamo: Préstamo a consultar.
+        args: Query con `tipo_cambio` y `porcentaje` opcionales.
+
+    Returns:
+        dict: Usuario, libro, retraso, `reposicion`, `porcentaje` y `monto_danio`.
+
+    Raises:
+        ApiError: 400 parámetros inválidos (tipo de cambio o porcentaje fuera de 10-100); 404 si no existe.
+    """
     d = validate(args, {"tipo_cambio": _TC, "porcentaje": _PORC})
     p = or_404(model.lock_loan(id_prestamo), NO_PRESTAMO)
     rep = circulacion.valor_reposicion(p["id_libro"], d["tipo_cambio"])
@@ -89,6 +165,19 @@ def previsualizar(id_prestamo, args):
 
 @audit("adeudo_pago", lambda r: f"adeudo {r['id_adeudo']}: ref {r['referencia_tesoreria']}")
 def pagar(id_adeudo, d, actor):
+    """Registra el pago de un adeudo pendiente en Tesorería (D-10, RF-27) y avisa por correo.
+
+    Args:
+        id_adeudo: Adeudo a pagar.
+        d: JSON con `referencia_tesoreria` (3-40 caracteres) y `fecha_pago` opcional (no futura).
+        actor: Usuario autenticado que ejecuta la acción.
+
+    Returns:
+        dict: Adeudo actualizado con `referencia_tesoreria`.
+
+    Raises:
+        ApiError: 400 payload o fecha inválida/futura; 404 no existe; 409 si ya no está pendiente.
+    """
     data = validate(d, SCHEMA_PAGO)
     a = or_404(model.get(id_adeudo), NO_ENCONTRADO)
     fecha = data["fecha_pago"] or date.today()
@@ -105,6 +194,19 @@ def pagar(id_adeudo, d, actor):
 
 @audit("adeudo_cancelar", lambda r: f"adeudo {r['id_adeudo']}: {r['motivo_cancelacion']}")
 def cancelar(id_adeudo, d, actor):
+    """Cancela un adeudo pendiente; exclusivo del administrador (D-04).
+
+    Args:
+        id_adeudo: Adeudo a cancelar.
+        d: JSON con `motivo` (3-120 caracteres).
+        actor: Usuario autenticado; debe tener rol 'admin'.
+
+    Returns:
+        dict: Adeudo actualizado con `motivo_cancelacion`.
+
+    Raises:
+        ApiError: 403 si no es admin; 400 payload inválido; 404 no existe; 409 si ya no está pendiente.
+    """
     if actor["rol"] != "admin":
         raise ApiError("Solo el administrador puede cancelar adeudos.", 403)
     data = validate(d, SCHEMA_CANCELAR)
@@ -115,12 +217,36 @@ def cancelar(id_adeudo, d, actor):
 
 
 def _retraso_adeudo(p, hoy):
+    """Crea el adeudo 'retraso' si hay días de retraso (RN-03).
+
+    Args:
+        p: Préstamo de `model.lock_loan`.
+        hoy: Fecha de corte.
+
+    Returns:
+        dict | None: Adeudo creado, o None si no hay retraso.
+    """
     dias, multa = _retraso(p, hoy)
     return model.add_debt(p["id_prestamo"], "retraso", multa, dias) if dias > 0 else None
 
 
 @audit("adeudo_perdida", lambda r: f"prestamo {r['id_prestamo']}: ${r['monto_mxn']:.2f}")
 def perdida(d, actor):
+    """Registra la pérdida de un ejemplar (RN-04, D-07).
+
+    Crea el adeudo de retraso (si aplica) y el de reposición, da de baja el ejemplar
+    ('perdido'), cierra el préstamo y notifica a Servicios Escolares, Tesorería y al usuario.
+
+    Args:
+        d: JSON con `id_prestamo`, `tipo_cambio` y `observacion` opcionales.
+        actor: Usuario autenticado que ejecuta la acción.
+
+    Returns:
+        dict: `id_prestamo`, `adeudos`, `valor_usd`, `tipo_cambio`, `monto_mxn` y `fuente`.
+
+    Raises:
+        ApiError: 400 payload inválido; 404 préstamo inexistente; 409 préstamo ya cerrado.
+    """
     data = validate(d, SCHEMA_PERDIDA)
     p = _prestamo_abierto(data["id_prestamo"])
     rep = circulacion.valor_reposicion(p["id_libro"], data["tipo_cambio"])
@@ -141,6 +267,21 @@ def perdida(d, actor):
 
 @audit("adeudo_danio", lambda r: f"prestamo {r['devolucion']['id_prestamo']}: ${r['adeudo']['monto']:.2f}")
 def danio(d, actor):
+    """Registra el daño de un ejemplar (D-08, RF-25).
+
+    Adeudo = porcentaje (10-100 %, 50 % por defecto) del valor de reposición, más retraso si aplica.
+    Con `dar_baja` el ejemplar queda en baja ('danado'); si no, vuelve a disponible y se avisa a la espera.
+
+    Args:
+        d: JSON con `id_prestamo`, `porcentaje`, `observacion` y `dar_baja` opcionales.
+        actor: Usuario autenticado que ejecuta la acción.
+
+    Returns:
+        dict: `adeudo`, `porcentaje`, `valor_reposicion`, `devolucion` y `espera_notificada`.
+
+    Raises:
+        ApiError: 400 payload o porcentaje inválido; 404 préstamo inexistente; 409 préstamo ya cerrado.
+    """
     data = validate(d, SCHEMA_DANIO)
     p = _prestamo_abierto(data["id_prestamo"])
     rep = circulacion.valor_reposicion(p["id_libro"])

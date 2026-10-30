@@ -1,10 +1,23 @@
+/** @module components/table — tabla de datos accesible con estado vacío. */
 import { html, attrs } from '/js/core/ui.js';
 import { emptyState } from './empty.js';
 
 /**
- * dataTable({ columns, rows, empty, rowHref, cls })
- *  columns: [{ key, label, render?(row, index), align?: 'center'|'right' }]
- *  rowHref(row) -> route: first cell becomes a link. empty: { title, text } shown when no rows.
+ * Tabla de datos con encabezados `scope="col"`; sin filas muestra el estado vacío.
+ * @param {Object} opts - Opciones.
+ * @param {Array<Object>} opts.columns - Columnas.
+ * @param {string} opts.columns[].key - Propiedad de la fila a mostrar.
+ * @param {string} opts.columns[].label - Encabezado.
+ * @param {function(Object, number): (Safe|string)} [opts.columns[].render] - Pinta la celda `(fila, índice)`.
+ * @param {string} [opts.columns[].align] - 'center' | 'right'.
+ * @param {Array<Object>} opts.rows - Filas.
+ * @param {Object} [opts.empty] - Opciones de `emptyState` ({ title, text }) cuando no hay filas.
+ * @param {function(Object): string} [opts.rowHref] - Ruta hash de la fila; la primera celda pasa a ser enlace.
+ * @param {string} [opts.cls] - Clases de la tabla.
+ * @returns {Safe} HTML de la tabla.
+ * @example
+ * dataTable({ columns: [{ key: 'titulo', label: 'Título' }, { key: 'estado', label: 'Estado',
+ *   render: (r) => statusBadge('estadoLibro', r.estado) }], rows: libros, rowHref: (r) => `libros/${r.id}` })
  */
 export function dataTable({ columns, rows, empty = {}, rowHref, cls = '' }) {
   if (!rows.length) return emptyState(empty);

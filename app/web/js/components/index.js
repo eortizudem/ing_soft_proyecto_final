@@ -1,4 +1,7 @@
-// Shared component library. Import everything from here: import { page, btn, dataTable } from '/js/components/index.js'
+/**
+ * @module components/index — biblioteca de componentes compartida; reexporta todo.
+ * Importar siempre desde aquí: `import { page, btn, dataTable } from '/js/components/index.js'`.
+ */
 export * from './labels.js';
 export * from './format.js';
 export * from './actions.js';

@@ -1,3 +1,4 @@
+"""Pruebas de notificaciones simuladas (D-11): envio, parseo, truncado y validacion de canales."""
 import pytest
 
 from app.core import notificaciones
@@ -6,11 +7,13 @@ from app.testing import make_user, sql
 
 
 def filas(id_usuario):
+    """Filas de bitacora `notif_*` del usuario, en orden de registro."""
     return sql("SELECT accion, detalle FROM bitacora WHERE id_usuario=%s AND accion LIKE 'notif_%%' ORDER BY id_bitacora",
                (id_usuario,))
 
 
 def test_enviar_y_parsear(app):
+    """`enviar` guarda el aviso en bitacora y `parsear` recupera canal, destino, asunto y cuerpo."""
     u = make_user()
     with app.app_context():
         notificaciones.enviar("email", "Recibo", "Tu préstamo vence el lunes", u["id_usuario"], "a@b.mx")
@@ -26,6 +29,7 @@ def test_enviar_y_parsear(app):
 
 
 def test_truncado_y_canal_invalido(app):
+    """El detalle se trunca a 200 caracteres y un canal desconocido lanza ApiError."""
     u = make_user()
     with app.app_context():
         notificaciones.enviar("whatsapp", "x", "y" * 500, u["id_usuario"], "55")
@@ -37,6 +41,7 @@ def test_truncado_y_canal_invalido(app):
 
 
 def test_enviar_a_usuario_resuelve_destino(app):
+    """`enviar_a_usuario` usa el correo para email y la matricula para los demas canales."""
     u = make_user()
     with app.app_context():
         notificaciones.enviar_a_usuario("email", "Hola", "cuerpo", u["id_usuario"])
@@ -48,6 +53,7 @@ def test_enviar_a_usuario_resuelve_destino(app):
 
 
 def test_validar_canales():
+    """`validar_canales` aplica el valor por defecto, quita repetidos y rechaza canales invalidos."""
     assert notificaciones.validar_canales(None) == ["email"]
     assert notificaciones.validar_canales(["whatsapp", "email", "whatsapp"]) == ["whatsapp", "email"]
     with pytest.raises(ApiError):

@@ -1,11 +1,23 @@
-// Adeudos HTML (pure functions: data -> components).
+/**
+ * @module modules/adeudos/view — HTML de adeudos, pago, cancelación, pérdida y daño (funciones puras: datos -> componentes; capa view).
+ */
 import { html } from '/js/core/ui.js';
 import { LIST_LIMIT } from '/js/core/api.js';
 import { page, btn, toolbar, resultsPanel, dataTable, statusBadge, formView, submitButton, detailView, receiptBlock,
   notice, labelItems, label, money, date, today, count } from '/js/components/index.js';
 
+/**
+ * Nombre y matrícula del usuario de un adeudo.
+ * @param {{usuario: {nombre_completo: string, matricula: string}}} a - Adeudo.
+ * @returns {Safe} HTML.
+ */
 const who = (a) => html`${a.usuario.nombre_completo} (${a.usuario.matricula})`;
 
+/**
+ * Página del listado de adeudos con búsqueda y filtros de estado y tipo.
+ * @param {{q: string, estado: string, tipo: string}} filters - Filtros actuales.
+ * @returns {Safe} Página con panel de resultados vacío.
+ */
 export const listPage = (filters) => page({
   title: 'Multas y pagos',
   desc: 'Adeudos por retraso, daño o pérdida. El pago se registra con la referencia de Tesorería.',
@@ -20,11 +32,22 @@ export const listPage = (filters) => page({
   ${resultsPanel()}`,
 });
 
+/**
+ * Texto del contador del listado.
+ * @param {Array<Object>} items - Adeudos cargados (`estado`, `monto`).
+ * @returns {string} Total y suma de montos pendientes.
+ */
 export const summary = (items) => {
   const pending = items.filter((a) => a.estado === 'pendiente').reduce((sum, a) => sum + a.monto, 0);
   return count(items.length, undefined, LIST_LIMIT) + ` · ${money(pending)} pendientes`;
 };
 
+/**
+ * Tabla de adeudos con acciones Ver/Registrar pago/Cancelar (esta última solo admin, solo pendientes).
+ * @param {Array<Object>} items - Adeudos con `usuario`, `libro`, `tipo`, `monto`, `estado`, `id_adeudo`.
+ * @param {boolean} isAdmin - Si se muestra la acción de cancelar.
+ * @returns {Safe} Tabla HTML.
+ */
 export const rows = (items, isAdmin) => dataTable({
   rows: items,
   empty: { text: 'No hay adeudos con esos filtros.' },
@@ -40,11 +63,22 @@ export const rows = (items, isAdmin) => dataTable({
   ],
 });
 
+/**
+ * Pares etiqueta/valor del adeudo (usuario, libro, tipo, días de retraso, monto).
+ * @param {Object} a - Adeudo.
+ * @returns {Array<Array>} Lista de `[etiqueta, valor]`.
+ */
 const payInfo = (a) => [
   ['Usuario', who(a)], ['Libro', `${a.libro.clave} · ${a.libro.titulo}`], ['Tipo', label('adeudoTipo', a.tipo)],
   ['Días de retraso', a.dias_retraso], ['Monto', money(a.monto)],
 ];
 
+/**
+ * Página de detalle del adeudo; incluye comprobante de pago si está pagado.
+ * @param {Object} a - Adeudo con `referencia_tesoreria`, `motivo_cancelacion`, `fecha_pago`, `id_prestamo`.
+ * @param {boolean} isAdmin - Si se muestra el botón de cancelar.
+ * @returns {Safe} Página.
+ */
 export const detail = (a, isAdmin) => page({
   title: `Adeudo ${a.id_adeudo}`,
   desc: 'Situación del adeudo y, si ya se cobró, su comprobante.',
@@ -69,6 +103,11 @@ export const detail = (a, isAdmin) => page({
   }) : ''}`,
 });
 
+/**
+ * Formulario de pago (referencia de Tesorería y fecha, por omisión hoy).
+ * @param {Object} a - Adeudo a cobrar.
+ * @returns {Safe} Página.
+ */
 export const payForm = (a) => page({
   title: 'Registrar pago',
   desc: 'Captura la referencia del comprobante entregado por Tesorería.',
@@ -84,6 +123,11 @@ export const payForm = (a) => page({
   })}`,
 });
 
+/**
+ * Formulario de cancelación con el motivo (solo admin).
+ * @param {Object} a - Adeudo a cancelar.
+ * @returns {Safe} Página.
+ */
 export const cancelFineForm = (a) => page({
   title: 'Cancelar adeudo',
   desc: 'Solo el administrador puede cancelar. Queda registrado en la bitácora.',
@@ -97,6 +141,11 @@ export const cancelFineForm = (a) => page({
 });
 
 // Amount summary shown before confirming a loss/damage report.
+/**
+ * Resumen de montos mostrado antes de confirmar pérdida o daño.
+ * @param {Object} p - Previsualización (`usuario`, `libro`, `numero_copia`, `fecha_vencimiento`, `monto_retraso`, `dias_retraso`, `reposicion`).
+ * @returns {Array<Array>} Lista de `[etiqueta, valor]`.
+ */
 const summaryItems = (p) => [
   ['Usuario', `${p.usuario.nombre_completo} (${p.usuario.matricula})`],
   ['Libro', `${p.libro.clave} · ${p.libro.titulo} (copia ${p.numero_copia})`],
@@ -106,10 +155,22 @@ const summaryItems = (p) => [
   ['Origen del precio', p.reposicion.fuente === 'ultima_compra' ? 'Última compra recibida' : 'Precio de referencia'],
 ];
 
+/**
+ * Bloque de montos recalculable (resumen más el adeudo resultante por pérdida o daño).
+ * @param {Object} p - Previsualización (ver `summaryItems`, más `porcentaje` y `monto_danio`).
+ * @param {'perdida'|'danio'} kind - Tipo de incidente.
+ * @returns {Safe} Elementos de lista de detalle.
+ */
 export const amounts = (p, kind) => html`${summaryItems(p).map(([l, v]) => html`<div class="detail-item"><dt>${l}</dt><dd>${v}</dd></div>`)}
   <div class="detail-item"><dt>${kind === 'perdida' ? 'Adeudo por pérdida' : `Adeudo por daño (${p.porcentaje} %)`}</dt>
   <dd><strong>${money(kind === 'perdida' ? p.reposicion.monto_mxn : p.monto_danio)}</strong></dd></div>`;
 
+/**
+ * Formulario de pérdida (tipo de cambio) o daño (porcentaje y baja del ejemplar), con aviso si el préstamo ya está cerrado.
+ * @param {Object} p - Previsualización con `abierto`, `id_prestamo`, `reposicion`, `porcentaje`.
+ * @param {'perdida'|'danio'} kind - Tipo de incidente.
+ * @returns {Safe} Página.
+ */
 export const incidentForm = (p, kind) => page({
   title: kind === 'perdida' ? 'Reportar pérdida' : 'Reportar daño',
   desc: kind === 'perdida'
@@ -132,6 +193,13 @@ export const incidentForm = (p, kind) => page({
   })}`,
 });
 
+/**
+ * Página de resultado genérica con detalle y enlace a adeudos.
+ * @param {string} title - Título.
+ * @param {Array<Array>} items - Pares `[etiqueta, valor]`.
+ * @param {Safe|string} [extra=''] - HTML adicional.
+ * @returns {Safe} Página.
+ */
 export const done = (title, items, extra = '') => page({
   title,
   body: html`${detailView({ title, items, actions: [btn({ label: 'Ver adeudos', href: 'adeudos', variant: 'primary' })] })}${extra}`,

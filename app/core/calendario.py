@@ -7,6 +7,7 @@ from datetime import date, datetime, timedelta
 
 
 def _d(x):
+    """Normaliza datetime a date."""
     return x.date() if isinstance(x, datetime) else x
 
 

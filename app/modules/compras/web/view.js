@@ -1,9 +1,15 @@
+/** @module modules/compras/view — HTML de solicitudes de compra (funciones puras: datos -> componentes) */
 import { html } from '/js/core/ui.js';
 import { page, btn, actions, cardList, itemCard, card, statusBadge, formField, formView, submitButton,
   meter, notice, detailGrid, datetime, date, usd } from '/js/components/index.js';
 import { total, pending } from './model.js';
 
 // Monthly budget bar (RF-05, D-22).
+/**
+ * Barra del presupuesto mensual (RF-05, D-22).
+ * @param {{mes: string, presupuesto_usd: number, usado_usd: number|string, disponible_usd: number}} b - Presupuesto de `GET /api/compras/presupuesto`.
+ * @returns {Object} Marcado HTML.
+ */
 export const budgetMeter = (b) => {
   const used = Number(b.usado_usd);
   const pct = b.presupuesto_usd > 0 ? Math.round((used / b.presupuesto_usd) * 100) : 100;
@@ -12,6 +18,12 @@ export const budgetMeter = (b) => {
     <p class="muted">Disponible: <strong>${usd(Math.max(b.disponible_usd, 0))}</strong></p></section>`;
 };
 
+/**
+ * Lista de solicitudes con folio, título(s), total, estado y acción.
+ * @param {Object[]} items - Solicitudes con `detalles`.
+ * @param {Object|null} budget - Presupuesto (opcional).
+ * @returns {Object} Marcado HTML.
+ */
 export const listPage = (items, budget) => page({
   title: 'Solicitudes de compra',
   desc: 'Prepara adquisiciones y da seguimiento a su envío a Tesorería.',
@@ -28,16 +40,38 @@ export const listPage = (items, budget) => page({
   })}`,
 });
 
+/**
+ * Fila de captura de un título (título, cantidad, precio unitario, quitar).
+ * @param {{descripcion: string, cantidad: number, precio_unitario: number}} l - Línea.
+ * @returns {Object} Marcado HTML.
+ */
 const line = (l) => html`<div class="purchase-line">
   ${formField({ name: 'descripcion', label: 'Título', value: l.descripcion, required: true, maxlength: 180, list: 'purchase-titles' })}
   ${formField({ name: 'cantidad', label: 'Cantidad', type: 'number', value: l.cantidad, required: true, min: 1, step: 1 })}
   ${formField({ name: 'precio_unitario', label: 'Precio unitario (USD)', type: 'number', value: l.precio_unitario, required: true, min: 0, step: 0.01 })}
   ${btn({ label: 'Quitar', action: 'remove-line' })}</div>`;
 
+/**
+ * Fila de captura de línea (por defecto vacía), para agregar líneas dinámicamente.
+ * @param {Object} [l] - Línea; por defecto vacía.
+ * @returns {Object} Marcado HTML.
+ */
 export const lineHtml = (l = { descripcion: '', cantidad: 1, precio_unitario: 0 }) => line(l);
 
+/**
+ * Texto del total estimado.
+ * @param {Object[]} lines - Líneas.
+ * @returns {string} 'Total estimado: USD ...'.
+ */
 export const totalText = (lines) => 'Total estimado: ' + usd(total(lines));
 
+/**
+ * Formulario de nueva solicitud: justificación, líneas editables y atajos de guardado.
+ * @param {{justificacion: string, detalles: Object[]}} draft - Borrador.
+ * @param {string[]} titles - Títulos sugeridos (datalist).
+ * @param {Object|null} budget - Presupuesto (opcional).
+ * @returns {Object} Marcado HTML.
+ */
 export const form = (draft, titles, budget) => page({
   title: 'Nueva solicitud de compra',
   desc: 'Para: Tesorería de la Universidad Ducky.',
@@ -54,6 +88,11 @@ export const form = (draft, titles, budget) => page({
   })}`,
 });
 
+/**
+ * Pantalla de revisión antes de enviar a Tesorería.
+ * @param {{justificacion: string, detalles: Object[], id?: number}} draft - Borrador.
+ * @returns {Object} Marcado HTML.
+ */
 export const review = (draft) => page({
   title: 'Revisar solicitud',
   desc: 'Confirma los datos antes de enviar a Tesorería.',
@@ -68,14 +107,33 @@ export const review = (draft) => page({
   }),
 });
 
+/**
+ * Línea del comprobante con subtotal y recibidos.
+ * @param {Object} l - Línea (descripcion, cantidad, precio_unitario, subtotal, cantidad_recibida).
+ * @returns {Object} Marcado HTML.
+ */
 const detailLine = (l) => html`<p>${l.descripcion} · ${l.cantidad} × ${usd(l.precio_unitario)} = ${usd(l.subtotal)}
   ${l.cantidad_recibida > 0 ? html`<span class="muted">· recibidos ${l.cantidad_recibida} de ${l.cantidad}</span>` : ''}</p>`;
 
+/**
+ * Datos de factura (folio, monto, fecha de llegada) si existe.
+ * @param {Object} s - Solicitud.
+ * @returns {Object|string} Marcado HTML o cadena vacía.
+ */
 const invoice = (s) => s.factura_folio ? detailGrid([
   ['Folio de factura', s.factura_folio], ['Monto facturado', usd(s.factura_total)],
   ['Fecha en que llegó el pedido', s.fecha_recepcion ? date(s.fecha_recepcion) : 'Recibido por partes'],
 ]) : '';
 
+/**
+ * Comprobante de solicitud con estado, datos, líneas, factura y acciones.
+ * @param {Object} s - Solicitud (folio, estado, destinatario, solicitante, fecha, justificacion, detalles, total_estimado, factura_*).
+ * @param {Object} permisos - Acciones permitidas.
+ * @param {boolean} permisos.canSend - Puede enviar (solicitud pendiente).
+ * @param {boolean} permisos.canReceive - Puede recibir pedido.
+ * @param {boolean} permisos.canCancel - Puede cancelar.
+ * @returns {Object} Marcado HTML.
+ */
 export const receipt = (s, { canSend, canReceive, canCancel }) => page({
   title: 'Comprobante de solicitud',
   desc: s.estado === 'pendiente' ? 'La solicitud aún no se ha enviado a Tesorería.' : 'Registro del envío a Tesorería.',
@@ -94,6 +152,11 @@ export const receipt = (s, { canSend, canReceive, canCancel }) => page({
     btn({ label: 'Imprimir comprobante', action: 'print' })])}`,
 });
 
+/**
+ * Formulario de recepción de pedido: factura y cantidades por línea pendiente.
+ * @param {Object} s - Solicitud con `detalles`.
+ * @returns {Object} Marcado HTML.
+ */
 export const reception = (s) => page({
   title: `Recibir pedido · ${s.folio}`,
   desc: 'Captura la factura de la Editorial y las cantidades recibidas en esta entrega.',

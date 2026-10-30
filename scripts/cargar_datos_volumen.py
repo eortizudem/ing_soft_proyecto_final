@@ -16,6 +16,16 @@ ultimos 2 anios; adeudos de retraso (10 % pendientes), renovaciones, lista de es
 con mensajes (10 % con_bibliotecario), solicitudes de compra y bitacora (login y notificaciones). Todos los usuarios V0000001..
 comparten la contrasena de ADM001 (para pruebas). Despues: ANALYZE y verificacion de conteos y consistencia.
 Para medir: ver docs/operacion.md seccion 3 (contenedor web aparte en el puerto 8199).
+
+Opciones: --db (BD destino, librigest_volumen), --usuarios / --ejemplares / --prestamos (cantidades minimas
+objetivo; la carga es incremental y repetible), --eliminar (borra la BD de volumen y termina), -y/--yes.
+
+Codigos de salida: 0 correcto; 1 error (nombre de BD invalido, docker/db caido, SQL fallido, cancelacion,
+verificacion con conteos por debajo del minimo o discrepancias de inventario).
+
+SEGURIDAD: con la BD por defecto (`librigest_volumen`) se DROPea y recrea sin confirmar. --eliminar hace DROP
+DATABASE de la BD indicada (se niega con la principal). Cargar en la BD principal mezcla datos sinteticos con
+los reales y exige escribir su nombre (o -y).
 """
 import argparse
 import re
@@ -25,13 +35,25 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import _pg  # noqa: E402
 
+# BD principal del proyecto: protegida contra --eliminar y contra cargas sin confirmacion.
 PRINCIPAL = _pg.config()["db"]
+# Nombres de BD aceptados (evita inyeccion en los DROP/CREATE DATABASE interpolados).
 NOMBRE_VALIDO = re.compile(r"^[a-z_][a-z0-9_]{0,40}$")
 COPIAS = 4  # ejemplares por libro sintetico
 
 
 def preparar_bd(db, cfg):
-    """Crea la BD `db` desde db/*.sql y la siembra (usuarios demo). Si existe, la recrea."""
+    """Crea la BD `db` desde db/*.sql y la siembra (usuarios demo). Si existe, la recrea.
+
+    La semilla (`python -m app.seed`) corre en un contenedor web temporal apuntando a `db`.
+
+    Args:
+        db: nombre de la BD a (re)crear (se elimina antes con DROP ... WITH (FORCE)).
+        cfg: dict de `_pg.config()` (usuario y clave).
+
+    Raises:
+        SystemExit: si falla algun comando SQL o la semilla (via `_pg`).
+    """
     usuario = cfg["usuario"]
     print(f"Creando BD {db} (se reemplaza si existe)...")
     _pg.psql(usuario, db, f'DROP DATABASE IF EXISTS "{db}" WITH (FORCE)')
@@ -48,7 +70,19 @@ def preparar_bd(db, cfg):
 
 
 def script_carga(estado, usuarios, ejemplares, prestamos):
-    """SQL de la carga. `estado` = max ids / conteos previos (para poder repetirla sin chocar)."""
+    """Genera el script SQL de la carga sintetica (una sola transaccion, con generate_series).
+
+    Calcula cuantas filas faltan respecto a lo ya existente, de modo que repetir la carga no choque con claves.
+
+    Args:
+        estado: dict devuelto por `estado_previo` (conteos y maximos actuales).
+        usuarios: total objetivo de usuarios.
+        ejemplares: total objetivo de ejemplares (se redondea a multiplos de COPIAS).
+        prestamos: total objetivo de prestamos (~15 % abiertos).
+
+    Returns:
+        Texto SQL con BEGIN ... COMMIT; ANALYZE.
+    """
     n_usr = max(0, usuarios - estado["usuarios"])
     n_ej = max(0, ejemplares - estado["ejemplares"])
     n_lib = -(-n_ej // COPIAS)
@@ -180,7 +214,15 @@ ANALYZE;
 
 
 def estado_previo(db):
-    """Conteos y maximos actuales (para cargar sin chocar con datos previos)."""
+    """Consulta conteos y maximos actuales de la BD para cargar sin chocar con datos previos.
+
+    Args:
+        db: base de datos a consultar.
+
+    Returns:
+        dict con conteos (usuarios, ejemplares, prestamos) y maximos/bases de numeracion (u_base, l_base,
+        s_base, libro_max, ejemplar_max, prestamo_max).
+    """
     cfg = _pg.config()
 
     def uno(sql):
@@ -199,6 +241,17 @@ def estado_previo(db):
 
 
 def verificar(db, minimos):
+    """Imprime filas por tabla y comprueba minimos y consistencia del inventario.
+
+    Consistencia: ningun ejemplar `prestado` sin prestamo abierto, ni `disponible` con prestamo abierto.
+
+    Args:
+        db: base de datos a verificar.
+        minimos: dict {tabla: filas minimas esperadas}.
+
+    Raises:
+        SystemExit: si alguna tabla queda por debajo del minimo o hay discrepancias (via `_pg.salir`).
+    """
     cfg = _pg.config()
     c = _pg.conteos(cfg["usuario"], db)
     print("\nFilas por tabla (BD %s):" % db)
@@ -217,12 +270,24 @@ def verificar(db, minimos):
 
 
 def main(argv=None):
+    """Punto de entrada: valida opciones, prepara la BD (o la elimina) y carga el dataset de volumen.
+
+    Args:
+        argv: lista de argumentos (None usa sys.argv); util para pruebas.
+
+    Returns:
+        0 en exito.
+
+    Raises:
+        SystemExit: ante nombre de BD invalido, intento de eliminar la principal, falta de confirmacion o
+            cualquier fallo de docker/SQL/verificacion.
+    """
     global ARGS_DB
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--db", default="librigest_volumen", help="BD destino (librigest_volumen)")
-    ap.add_argument("--usuarios", type=int, default=5000)
-    ap.add_argument("--ejemplares", type=int, default=10000)
-    ap.add_argument("--prestamos", type=int, default=20000)
+    ap.add_argument("--usuarios", type=int, default=5000, help="usuarios totales objetivo (5000)")
+    ap.add_argument("--ejemplares", type=int, default=10000, help="ejemplares totales objetivo (10000)")
+    ap.add_argument("--prestamos", type=int, default=20000, help="prestamos totales objetivo (20000)")
     ap.add_argument("--eliminar", action="store_true", help="elimina la BD de volumen y termina")
     ap.add_argument("-y", "--yes", action="store_true", help="no pedir confirmacion (obligatorio sin terminal)")
     a = ap.parse_args(argv)

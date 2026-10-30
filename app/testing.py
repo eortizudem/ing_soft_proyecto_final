@@ -1,3 +1,5 @@
+"""Utilidades de prueba: acceso directo a la BD, clientes autenticados y fabricas de usuarios, libros y prestamos.
+No se usa en produccion; requiere `DATABASE_URL` en el entorno."""
 import os
 import uuid
 
@@ -7,24 +9,32 @@ from werkzeug.security import generate_password_hash
 
 
 def url():
+    """URL de la BD de pruebas (variable de entorno obligatoria `DATABASE_URL`)."""
     return os.environ["DATABASE_URL"]
 
 
 def sql(query, params=()):
+    """Ejecuta `query` con conexion propia en autocommit; devuelve filas (dict) o None si no produce resultados.
+
+    Al ser autocommit, lo escrito persiste (lo limpia el fixture `limpiar_datos` de conftest.py).
+    """
     with psycopg.connect(url(), row_factory=dict_row, autocommit=True) as c:
         cur = c.execute(query, params)
         return cur.fetchall() if cur.description else None
 
 
 def uniq(n=6):
+    """Sufijo aleatorio en mayusculas de `n` caracteres hexadecimales, para datos de prueba unicos."""
     return uuid.uuid4().hex[:n].upper()
 
 
 def login(client, matricula, password):
+    """POST /api/login con las credenciales dadas; devuelve la respuesta sin validarla."""
     return client.post("/api/login", json={"matricula": matricula, "password": password})
 
 
 def client_as(app, matricula, password):
+    """Cliente de pruebas ya autenticado; falla con `assert` si el login no devuelve 200."""
     c = app.test_client()
     r = login(c, matricula, password)
     assert r.status_code == 200, r.get_json()
@@ -32,6 +42,7 @@ def client_as(app, matricula, password):
 
 
 def user_payload(**over):
+    """Cuerpo valido para crear un usuario (alumno activo con datos unicos); `over` sobrescribe campos."""
     s = uniq()
     d = {"matricula": f"T{uniq(9)}", "nombre_completo": f"Usuario Prueba {s}", "correo": f"t{s.lower()}@ducky.edu.mx",
          "rol": "alumno", "estado": "activo", "fuente_validacion": "manual", "password": "Prueba123"}
@@ -40,6 +51,7 @@ def user_payload(**over):
 
 
 def libro_payload(**over):
+    """Cuerpo valido para crear un libro prestable con 3 ejemplares y datos unicos; `over` sobrescribe campos."""
     s = uniq()
     d = {"clave": f"X{s}", "titulo": f"Libro de prueba {s}", "autor": "Autor Prueba", "editorial": "Editorial",
          "tema": "Pruebas", "anio_publicacion": 2020, "tipo_uso": "prestamo_externo", "clasificacion": "000 PRU",

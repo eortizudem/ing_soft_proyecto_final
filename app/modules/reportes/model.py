@@ -1,7 +1,20 @@
+"""Capa modelo de reportes: consultas SQL de solo lectura para cada tipo de reporte y registro en `reporte_generado`.
+
+Sin reglas de negocio ni formato de salida (eso es `service.py`).
+"""
+
 from app.core import consultas, repo
 
 
 def catalogo(solo_activos):
+    """Reporte `catalogo_completo` / `catalogo_activo`: libros con existencia y disponibilidad.
+
+    Args:
+        solo_activos (bool): Si es True, solo libros activos.
+
+    Returns:
+        list[dict]: clave, titulo, autor, tema, estado, ejemplares (sin bajas), disponibles.
+    """
     return repo.fetch_all(
         f"""SELECT l.clave, l.titulo, l.autor, l.tema, l.estado,
              (SELECT count(*) FROM ejemplar e WHERE e.id_libro=l.id_libro AND e.estado<>'baja')::int AS ejemplares,
@@ -12,19 +25,42 @@ def catalogo(solo_activos):
 
 
 def usuarios():
+    """Reporte `usuarios`: todos los usuarios con su perfil.
+
+    Returns:
+        list[dict]: matricula, nombre_completo, correo, perfil, estado.
+    """
     return repo.fetch_all(
         """SELECT u.matricula, u.nombre_completo, u.correo, r.descripcion AS perfil, u.estado
            FROM usuario u JOIN rol r ON r.id_rol=u.id_rol ORDER BY u.matricula""")
 
 
 def registrar(id_usuario, tipo, formato, total):
+    """Registra la generación de un reporte en `reporte_generado`.
+
+    Args:
+        id_usuario (int): Quien lo generó.
+        tipo (str): Tipo de reporte.
+        formato (str): 'pantalla' | 'pdf' | 'impresion'.
+        total (int): Número de filas (se limita a 32767).
+
+    Returns:
+        datetime: Fecha de generación.
+    """
     return repo.insert("reporte_generado", {"id_usuario": id_usuario, "tipo": tipo, "formato": formato,
                                             "total_titulos": min(total, 32767)}, returning="fecha")["fecha"]
 
 
 def con_adeudos(roles):
     """Usuarios de los `roles` con préstamo vencido (D-24) o adeudo pendiente (misma definición que
-    `core.circulacion.contexto_usuario`)."""
+    `core.circulacion.contexto_usuario`).
+
+    Args:
+        roles (Iterable[str]): Nombres de rol a incluir (p. ej. 'alumno', 'docente').
+
+    Returns:
+        list[dict]: id_usuario, matricula, nombre_completo, correo, rol, vencidos, adeudos, monto.
+    """
     return repo.fetch_all(
         f"""SELECT * FROM (
              SELECT u.id_usuario, u.matricula, u.nombre_completo, u.correo, r.nombre AS rol,
@@ -37,7 +73,11 @@ def con_adeudos(roles):
 
 
 def prestamos_vencidos():
-    """Préstamos vencidos (D-24) con usuario, libro y tarifa diaria de la política con que se crearon (D-05)."""
+    """Préstamos vencidos (D-24) con usuario, libro y tarifa diaria de la política con que se crearon (D-05).
+
+    Returns:
+        list[dict]: Préstamos vencidos ordenados por fecha de vencimiento, con `multa_diaria`.
+    """
     return repo.fetch_all(
         f"""SELECT p.id_prestamo, p.id_usuario, u.matricula, u.nombre_completo, l.clave, l.titulo, e.numero_copia,
                   p.fecha_prestamo::date AS fecha_prestamo, p.fecha_vencimiento, pol.multa_diaria
@@ -49,6 +89,15 @@ def prestamos_vencidos():
 
 
 def prestamos(desde, hasta):
+    """Reporte `prestamos`: préstamos cuya fecha de préstamo cae en el rango.
+
+    Args:
+        desde (date | None): Fecha inicial inclusiva; None = sin límite.
+        hasta (date | None): Fecha final inclusiva; None = sin límite.
+
+    Returns:
+        list[dict]: Préstamos con usuario, libro, copia, fechas y renovaciones.
+    """
     return repo.fetch_all(
         """SELECT p.id_prestamo, u.matricula, u.nombre_completo, l.clave, l.titulo, e.numero_copia,
                   p.fecha_prestamo::date AS fecha_prestamo, p.fecha_vencimiento,
@@ -61,6 +110,17 @@ def prestamos(desde, hasta):
 
 
 def existencia(planta, pasillo, librero, tema):
+    """Reporte `inventario_estante` (RF-16): existencias por libro y ubicación.
+
+    Args:
+        planta (str | None): Planta (sin distinguir mayúsculas); None = todas.
+        pasillo (str | None): Letra de pasillo.
+        librero (str | None): Librero a dos dígitos.
+        tema (str | None): Texto contenido en el tema (sin acentos).
+
+    Returns:
+        list[dict]: clave, titulo, estado, ubicación, existencia (sin bajas), disponibles, prestados, bajas.
+    """
     return repo.fetch_all(
         """SELECT l.clave, l.titulo, l.estado, u.planta, u.pasillo, u.librero, u.nivel,
              count(e.id_ejemplar) FILTER (WHERE e.estado<>'baja')::int AS existencia,
@@ -101,7 +161,15 @@ def indicadores_inventario():
 
 
 def duracion_prestamos(desde, hasta):
-    """Promedio de dias entre el prestamo y la devolucion (prestamos devueltos del periodo)."""
+    """Promedio de días entre el préstamo y la devolución (préstamos devueltos del periodo).
+
+    Args:
+        desde (date | None): Fecha inicial inclusiva.
+        hasta (date | None): Fecha final inclusiva.
+
+    Returns:
+        dict: {devueltos, dias} (`dias` es None si no hay devueltos).
+    """
     return repo.fetch_one(
         """SELECT count(*)::int AS devueltos,
              round(avg(extract(epoch FROM (p.fecha_devolucion - p.fecha_prestamo)) / 86400)::numeric, 1) AS dias
@@ -111,6 +179,15 @@ def duracion_prestamos(desde, hasta):
 
 
 def prestamos_por_mes(desde, hasta):
+    """Préstamos y devueltos por mes (AAAA-MM) según fecha de préstamo.
+
+    Args:
+        desde (date | None): Fecha inicial inclusiva.
+        hasta (date | None): Fecha final inclusiva.
+
+    Returns:
+        list[dict]: periodo, prestamos, devueltos.
+    """
     return repo.fetch_all(
         """SELECT to_char(p.fecha_prestamo, 'YYYY-MM') AS periodo, count(*)::int AS prestamos,
              count(*) FILTER (WHERE p.fecha_devolucion IS NOT NULL)::int AS devueltos
@@ -121,7 +198,16 @@ def prestamos_por_mes(desde, hasta):
 
 
 def errores(desde, hasta, limite=200):
-    """Errores de la bitacora (mas recientes primero); `usuario` es NULL si no habia sesion."""
+    """Errores de la bitácora (más recientes primero); `matricula` es NULL si no había sesión (PS-S3-06).
+
+    Args:
+        desde (date | None): Fecha inicial inclusiva.
+        hasta (date | None): Fecha final inclusiva.
+        limite (int): Máximo de renglones.
+
+    Returns:
+        list[dict]: fecha, detalle, matricula.
+    """
     return repo.fetch_all(
         """SELECT b.fecha, b.detalle, u.matricula FROM bitacora b LEFT JOIN usuario u ON u.id_usuario = b.id_usuario
            WHERE b.accion = 'error_sistema'

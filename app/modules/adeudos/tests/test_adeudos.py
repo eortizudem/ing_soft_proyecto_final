@@ -1,3 +1,8 @@
+"""Pruebas de integración de adeudos (RN-03, RN-04, D-04, D-07, D-08, D-10).
+
+Cubre permisos, listados, pago, cancelación solo admin, tipo de cambio, valor de
+reposición, pérdida, daño y previsualización.
+"""
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -8,6 +13,7 @@ from app.testing import make_book, make_loan, make_user, sql, uniq
 
 
 def _loan(vencido_dias=0, **book):
+    """Crea usuario, libro (precio 100) y préstamo; opcionalmente lo vence hace N días."""
     u = make_user()
     b = make_book(precio_referencia=100, **book)
     pid = make_loan(u["id_usuario"], b["id_libro"])
@@ -18,16 +24,19 @@ def _loan(vencido_dias=0, **book):
 
 
 def _adeudo(u, tipo="retraso", monto=20):
+    """Inserta un adeudo pendiente sobre el préstamo del usuario; devuelve su id."""
     pid = sql("SELECT id_prestamo FROM prestamo WHERE id_usuario=%s LIMIT 1", (u["id_usuario"],))[0]["id_prestamo"]
     return sql("INSERT INTO adeudo(id_prestamo,tipo,monto) VALUES (%s,%s,%s) RETURNING id_adeudo",
                (pid, tipo, monto))[0]["id_adeudo"]
 
 
 def _notifs(canal):
+    """Cuenta los avisos de bitácora enviados por un canal."""
     return sql("SELECT count(*) AS n FROM bitacora WHERE accion=%s", (f"notif_{canal}",))[0]["n"]
 
 
 def _compra(id_libro, precio):
+    """Crea una solicitud de compra recibida con el precio unitario dado para un libro."""
     adm = sql("SELECT id_usuario FROM usuario WHERE matricula='ADM001'")[0]["id_usuario"]
     s = sql("INSERT INTO solicitud_compra(folio,id_usuario,justificacion,estado,fecha_recepcion) "
             "VALUES (%s,%s,'prueba','recibida',CURRENT_DATE) RETURNING id_solicitud", (f"Z{uniq(8)}", adm))[0]
@@ -36,6 +45,7 @@ def _compra(id_libro, precio):
 
 
 def test_permisos(alumno, anon):
+    """Sin sesión 401 y alumno 403 en las rutas de adeudos."""
     assert anon.get("/api/adeudos").status_code == 401
     assert alumno.get("/api/adeudos").status_code == 403
     assert alumno.get("/api/tipo-cambio").status_code == 403
@@ -43,6 +53,7 @@ def test_permisos(alumno, anon):
 
 
 def test_listar_y_filtros(bibliotecario):
+    """Listado filtrado por estado, tipo, matrícula y texto."""
     u, _, _ = _loan()
     id_ad = _adeudo(u)
     rows = bibliotecario.get(f"/api/adeudos?matricula={u['matricula']}").get_json()
@@ -56,6 +67,7 @@ def test_listar_y_filtros(bibliotecario):
 
 
 def test_pago(bibliotecario):
+    """Pagar exige referencia, rechaza fecha futura y doble pago (409), y envía aviso (D-10)."""
     u, _, _ = _loan()
     id_ad = _adeudo(u)
     assert bibliotecario.post(f"/api/adeudos/{id_ad}/pago", json={}).status_code == 400
@@ -75,6 +87,7 @@ def test_pago(bibliotecario):
 
 
 def test_cancelar_solo_admin(admin, bibliotecario):
+    """Solo el admin cancela adeudos, con motivo obligatorio (D-04)."""
     u, _, _ = _loan()
     id_ad = _adeudo(u)
     assert bibliotecario.post(f"/api/adeudos/{id_ad}/cancelar", json={"motivo": "Caso especial"}).status_code == 403
@@ -88,11 +101,13 @@ def test_cancelar_solo_admin(admin, bibliotecario):
 
 
 def test_tipo_cambio(bibliotecario):
+    """El endpoint devuelve el tipo de cambio simulado."""
     r = bibliotecario.get("/api/tipo-cambio").get_json()
     assert r["usd_mxn"] == 18.0 and r["fuente"] == "simulado" and r["nota"]
 
 
 def test_reposicion_con_y_sin_compra(bibliotecario):
+    """Reposición usa la última compra recibida o el precio de referencia (D-07)."""
     b = make_book(precio_referencia=33.33)
     r = bibliotecario.get(f"/api/adeudos/reposicion?id_libro={b['id_libro']}").get_json()
     assert (r["fuente"], r["valor_usd"], r["tipo_cambio"], r["monto_mxn"]) == ("precio_referencia", 33.33, 18.0, 599.94)
@@ -107,6 +122,7 @@ def test_reposicion_con_y_sin_compra(bibliotecario):
 
 
 def test_perdida(bibliotecario, app):
+    """Pérdida crea adeudos, da de baja el ejemplar, cierra el préstamo y notifica (RN-04)."""
     u, b, pid = _loan(vencido_dias=7)
     se, te = _notifs("servicios_escolares"), _notifs("tesoreria")
     r = bibliotecario.post("/api/adeudos/perdida", json={"id_prestamo": pid, "tipo_cambio": 20.5})
@@ -134,6 +150,7 @@ def test_perdida(bibliotecario, app):
 
 
 def test_perdida_sin_retraso_y_errores(bibliotecario):
+    """Pérdida sin retraso crea un solo adeudo; errores 400/404/409."""
     u, b, pid = _loan()
     assert bibliotecario.post("/api/adeudos/perdida", json={}).status_code == 400
     assert bibliotecario.post("/api/adeudos/perdida", json={"id_prestamo": 99999999}).status_code == 404
@@ -145,6 +162,7 @@ def test_perdida_sin_retraso_y_errores(bibliotecario):
 
 @pytest.mark.parametrize("porc,monto", [(None, 900.0), (100, 1800.0), (10, 180.0)])
 def test_danio(bibliotecario, porc, monto):
+    """Daño genera adeudo por el porcentaje indicado (50 % por defecto) de la reposición (D-08)."""
     u, b, pid = _loan()
     payload = {"id_prestamo": pid, **({"porcentaje": porc} if porc else {})}
     r = bibliotecario.post("/api/adeudos/danio", json=payload)
@@ -158,6 +176,7 @@ def test_danio(bibliotecario, porc, monto):
 
 
 def test_danio_baja_retraso_y_porcentaje_invalido(bibliotecario):
+    """Daño con baja y retraso; porcentaje fuera de 10-100 da 400."""
     u, b, pid = _loan(vencido_dias=7)
     assert bibliotecario.post("/api/adeudos/danio", json={"id_prestamo": pid, "porcentaje": 5}).status_code == 400
     assert bibliotecario.post("/api/adeudos/danio", json={"id_prestamo": pid, "porcentaje": 101}).status_code == 400
@@ -168,6 +187,7 @@ def test_danio_baja_retraso_y_porcentaje_invalido(bibliotecario):
 
 
 def test_danio_sin_baja_avisa_a_la_lista_de_espera(bibliotecario):
+    """Daño sin baja deja el ejemplar disponible y avisa a la espera."""
     u, b, pid = _loan(ejemplares=1)
     esperando = make_user()
     sql("INSERT INTO lista_espera(id_usuario,id_libro,posicion) VALUES (%s,%s,1)", (esperando["id_usuario"], b["id_libro"]))
@@ -178,6 +198,7 @@ def test_danio_sin_baja_avisa_a_la_lista_de_espera(bibliotecario):
 
 
 def test_previsualizar(bibliotecario):
+    """Previsualizar calcula montos sin escribir en BD."""
     u, b, pid = _loan(vencido_dias=7)
     r = bibliotecario.get(f"/api/adeudos/prestamo/{pid}?porcentaje=20&tipo_cambio=10").get_json()
     assert r["reposicion"]["monto_mxn"] == 1000.0 and r["monto_danio"] == 200.0 and r["abierto"]

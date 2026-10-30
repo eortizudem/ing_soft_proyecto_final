@@ -1,11 +1,19 @@
+/** @module modules/usuarios/controller — rutas hash del módulo de usuarios; orquesta modelo y vista */
 import { label, onAction, bindForm, bindFileToText } from '/js/components/index.js';
 import { $ } from '/js/core/ui.js';
 import { listPage, editPage, bindToggle } from '/js/core/crud.js';
 import * as model from './model.js';
 import * as view from './view.js';
 
+/** Filtros del listado; persisten entre visitas a la ruta. */
 const filters = { q: '', rol: '', estado: '' };
 
+/**
+ * Ruta `#usuarios` (permiso `usuarios`): listado con búsqueda y filtros.
+ * @param {Object} params - Parámetros de ruta (sin uso).
+ * @param {Object} ctx - Contexto de render del router.
+ * @returns {Promise<void>}
+ */
 async function list(params, ctx) {
   const roles = await model.roles();
   const map = model.roleMap(roles);
@@ -18,6 +26,12 @@ async function list(params, ctx) {
   });
 }
 
+/**
+ * Rutas `#usuarios/nuevo` y `#usuarios/:id/editar` (permiso `usuarios`): formulario de alta o edición; al guardar redirige a la ficha.
+ * @param {{id?: string}} params - `id` presente al editar.
+ * @param {Object} ctx - Contexto de render del router.
+ * @returns {Promise<void>}
+ */
 async function edit(params, ctx) {
   const editing = !!params.id;
   const [roles, user] = await Promise.all([model.roles(), editing ? model.get(params.id) : model.emptyUser()]);
@@ -30,6 +44,12 @@ async function edit(params, ctx) {
   });
 }
 
+/**
+ * Ruta `#usuarios/:id` (permiso `usuarios`): ficha con historial y acción de baja/reactivación con confirmación.
+ * @param {{id: string}} params - Id de la cuenta.
+ * @param {Object} ctx - Contexto de render del router.
+ * @returns {Promise<void>}
+ */
 async function detail(params, ctx) {
   const empty = { prestamos: [], renovaciones: [], adeudos: [], espera: [], bitacora: [] };
   const [roles, user, hist] = await Promise.all([model.roles(), model.get(params.id),
@@ -49,6 +69,13 @@ async function detail(params, ctx) {
   });
 }
 
+/**
+ * Ruta `#usuarios/actualizar` (permiso `usuarios`): vista previa y aplicación de la actualización desde Servicios Escolares.
+ * @param {Object} params - Parámetros de ruta.
+ * @param {Object} ctx - Contexto de render del router.
+ * @param {string} [result] - HTML del resultado previo a conservar tras volver a dibujar.
+ * @returns {Promise<void>}
+ */
 async function sync(params, ctx, result = '') {
   const main = ctx.render(view.syncPage(await model.syncPreview()));
   if (!main) return;
@@ -59,6 +86,12 @@ async function sync(params, ctx, result = '') {
   });
 }
 
+/**
+ * Ruta `#usuarios/importar` (permiso `usuarios`): importación de lista de alumnos por CSV.
+ * @param {Object} params - Parámetros de ruta (sin uso).
+ * @param {Object} ctx - Contexto de render del router.
+ * @returns {void}
+ */
 function importar(params, ctx) {
   const main = ctx.render(view.importPage());
   if (!main) return;
@@ -70,6 +103,7 @@ function importar(params, ctx) {
   });
 }
 
+/** Rutas del módulo (hash path, permiso `usuarios`, sección `usuarios`). */
 export const routes = [
   { path: 'usuarios', perm: 'usuarios', section: 'usuarios', action: list },
   { path: 'usuarios/nuevo', perm: 'usuarios', section: 'usuarios', action: edit },

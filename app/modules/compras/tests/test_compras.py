@@ -1,3 +1,9 @@
+"""Pruebas de integración del módulo compras (API `/api/compras`).
+
+Cubren permisos, folio y total, vínculo título-libro, validación, ciclo de estados, presupuesto mensual
+(RF-05, D-22) y recepción parcial/total con factura (RF-06, D-25).
+"""
+
 import re
 from decimal import Decimal
 
@@ -20,6 +26,7 @@ def presupuesto_amplio(app):
 
 
 def _p(**over):
+    """Payload de solicitud de compra válido con dos líneas; `over` sobrescribe campos."""
     d = {"justificacion": "Prueba de compra", "detalles": [
         {"descripcion": "Libro nuevo X", "cantidad": 2, "precio_unitario": 100.5},
         {"descripcion": "redes de COMPUTADORAS", "cantidad": 1, "precio_unitario": 800}]}
@@ -28,18 +35,21 @@ def _p(**over):
 
 
 def test_permissions(alumno, anon):
+    """Sin permiso `compras` 403; sin sesión 401."""
     assert alumno.get("/api/compras").status_code == 403
     assert alumno.post("/api/compras", json=_p()).status_code == 403
     assert anon.get("/api/compras").status_code == 401
 
 
 def test_seed_sol001(comprador):
+    """La solicitud semilla SOL001 tiene total, estado, detalles, solicitante y fecha esperados."""
     s = [x for x in comprador.get("/api/compras").get_json() if x["folio"] == "SOL001"][0]
     assert s["total_estimado"] == 2500 and s["estado"] == "pendiente" and len(s["detalles"]) == 2
     assert s["solicitante"] == "Responsable de compras" and s["fecha"] == "2026-10-14"
 
 
 def test_total_folio_and_book_match(comprador):
+    """El total suma líneas, el folio es consecutivo y el título coincidente se enlaza con un libro."""
     a = comprador.post("/api/compras", json=_p())
     assert a.status_code == 201
     a = a.get_json()
@@ -54,6 +64,7 @@ def test_total_folio_and_book_match(comprador):
 
 
 def test_validation(comprador):
+    """Justificación, detalles, cantidad, precio y descripción inválidos responden 400."""
     line = {"descripcion": "X", "cantidad": 1, "precio_unitario": 1}
     for bad in ({"justificacion": ""}, {"detalles": []}, {"detalles": [{**line, "cantidad": 0}]},
                 {"detalles": [{**line, "cantidad": 10001}]}, {"detalles": [{**line, "cantidad": 1.5}]},
@@ -64,6 +75,7 @@ def test_validation(comprador):
 
 
 def test_enviar(comprador, admin):
+    """Enviar cambia a 'enviada', no repite (400), 404 si no existe, y deja bitácora."""
     s = comprador.post("/api/compras", json=_p()).get_json()
     j = comprador.post(f"/api/compras/{s['id_solicitud']}/enviar").get_json()
     assert j["estado"] == "enviada"
@@ -74,11 +86,13 @@ def test_enviar(comprador, admin):
 
 
 def _enviada(c, detalles=None):
+    """Crea una solicitud y la envía; devuelve el JSON resultante."""
     s = c.post("/api/compras", json=_p(detalles=detalles) if detalles else _p()).get_json()
     return c.post(f"/api/compras/{s['id_solicitud']}/enviar").get_json()
 
 
 def _rec(s, cantidades, folio="FAC-T-001", total=100):
+    """Arma el payload de recepción con las cantidades recibidas por línea."""
     return {"factura_folio": folio, "factura_total": total,
             "lineas": [{"id_detalle": d["id_detalle"], "cantidad_recibida": n}
                        for d, n in zip(s["detalles"], cantidades)]}
@@ -92,6 +106,7 @@ def _presupuesto_holgura(c, app, holgura=1000):
 
 
 def test_presupuesto(comprador, app):
+    """El presupuesto calcula disponible, acepta `mes`, rechaza formato inválido y bloquea totales excedentes (422)."""
     _presupuesto_holgura(comprador, app)
     base = comprador.get("/api/compras/presupuesto").get_json()
     assert base["disponible_usd"] == 1000
@@ -112,6 +127,7 @@ def test_presupuesto(comprador, app):
 
 
 def test_cancelar_libera_presupuesto(comprador, app):
+    """Cancelar libera presupuesto; repetir da 409, inexistente 404 y no se puede recibir."""
     _presupuesto_holgura(comprador, app)
     disp = comprador.get("/api/compras/presupuesto").get_json()["disponible_usd"]
     s = comprador.post("/api/compras", json=_p(detalles=[
@@ -126,12 +142,14 @@ def test_cancelar_libera_presupuesto(comprador, app):
 
 
 def test_recepcion_requiere_enviada(comprador):
+    """Recibir una solicitud no enviada responde 409."""
     s = comprador.post("/api/compras", json=_p()).get_json()
     r = comprador.post(f"/api/compras/{s['id_solicitud']}/recibir", json=_rec(s, [1, 1]))
     assert r.status_code == 409
 
 
 def test_recepcion_parcial_y_total(comprador, alumno, app):
+    """Recepción parcial y total: ejemplares, pendientes de catalogar, validaciones, aviso a Tesorería y precio de reposición."""
     libro = make_book()
     lineas = [{"descripcion": libro["titulo"], "cantidad": 3, "precio_unitario": 55},
               {"descripcion": "Titulo sin catalogar zz", "cantidad": 2, "precio_unitario": 10}]

@@ -1,10 +1,22 @@
+/** @module modules/perfiles/view — HTML puro de la matriz de permisos por perfil */
 import { html, attrs } from '/js/core/ui.js';
 import { page, card, dataTable, badge, btn, actions } from '/js/components/index.js';
 
 // El administrador conserva usuarios y perfiles (regla del servidor): esas casillas se muestran fijas.
+/**
+ * Indica si una casilla es fija: el admin conserva `usuarios` y `perfiles` (regla del servidor).
+ * @param {{nombre: string}} r - Perfil.
+ * @param {{nombre: string}} p - Permiso.
+ * @returns {boolean}
+ */
 const locked = (r, p) => r.nombre === 'admin' && ['usuarios', 'perfiles'].includes(p.nombre);
 
-// Permission matrix: rows = permissions, columns = roles. Editable cells are checkboxes.
+/**
+ * Matriz de permisos: filas = permisos, columnas = perfiles. Editable: casillas con `data-rol`/`data-permiso`; solo lectura: Sí/No.
+ * @param {{roles: Array<{nombre: string, descripcion: string}>, permisos: Array<{nombre: string, descripcion: string}>, matriz: Object<string, Object<string, boolean>>}} data - Respuesta de GET /api/roles.
+ * @param {boolean} editable - true si el usuario tiene el permiso `perfiles`.
+ * @returns {*} Tabla (componente `dataTable`).
+ */
 export const matrix = (data, editable) => dataTable({
   cls: 'matrix',
   rows: data.permisos,
@@ -23,6 +35,12 @@ export const matrix = (data, editable) => dataTable({
   ],
 });
 
+/**
+ * Página "Perfiles y permisos" con la matriz dentro de `#matrix`.
+ * @param {Object} data - Respuesta de GET /api/roles (ver `matrix`).
+ * @param {boolean} editable - true si se puede editar.
+ * @returns {*} Página (componente `page`).
+ */
 export const show = (data, editable) => page({
   title: 'Perfiles y permisos',
   desc: 'Cada perfil accede únicamente a las funciones que necesita.',

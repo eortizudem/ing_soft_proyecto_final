@@ -1,3 +1,4 @@
+/** @module modules/catalogo/controller — rutas y manejo de eventos de catálogo, búsqueda pública, ubicación e importación */
 import * as session from '/js/core/session.js';
 import { $, setFlash, showError } from '/js/core/ui.js';
 import { listPage, editPage, bindToggle } from '/js/core/crud.js';
@@ -6,8 +7,18 @@ import { downloadPdf } from '/js/core/pdf.js';
 import * as model from './model.js';
 import * as view from './view.js';
 
+/**
+ * Filtros vigentes de la lista administrativa del catálogo.
+ * @type {Object}
+ */
 const filters = { q: '', campo: '', tema: '', estado: '', tipo_uso: '', disponibilidad: '' };
 
+/**
+ * Ruta `#/catalogo` (permiso `catalogo`): lista administrativa de libros con filtros.
+ * @param {Object} params - Parámetros de ruta (sin uso).
+ * @param {Object} ctx - Contexto del router (render, query).
+ * @returns {Promise<void>}
+ */
 async function list(params, ctx) {
   const themes = await model.themes();
   await listPage(ctx, {
@@ -19,6 +30,13 @@ async function list(params, ctx) {
   });
 }
 
+/**
+ * Rutas `#/libros/nuevo` y `#/libros/:id/editar` (permiso `catalogo`): formulario de ficha.
+ * Con `?id_detalle=N` precarga datos de la compra recibida pendiente.
+ * @param {{id?: string}} params - Parámetros de ruta; `id` si se edita.
+ * @param {Object} ctx - Contexto del router (render, query).
+ * @returns {Promise<void>}
+ */
 async function edit(params, ctx) {
   const editing = !!params.id;
   // "#/libros/nuevo?id_detalle=N": book received by Compras; prefill from the pending line.
@@ -37,17 +55,40 @@ async function edit(params, ctx) {
   });
 }
 
+/**
+ * Indica si el usuario en sesión (no visitante) puede unirse a una lista de espera.
+ * @returns {boolean}
+ */
 const canWait = () => !!session.get() && !session.isVisitor();
 
+/**
+ * Ruta `#/libros/:id` (permiso `catalogo` o `buscar`): ficha del libro; con permiso `catalogo` agrega ejemplares, baja/reactivar, imprimir/PDF y activar/inactivar.
+ * @param {{id: string}} params - Parámetros de ruta.
+ * @param {Object} ctx - Contexto del router.
+ * @returns {Promise<void>}
+ */
 async function detail(params, ctx) {
   const book = await model.get(params.id);
   const canEdit = session.can('catalogo');
   const ejemplares = canEdit ? await model.ejemplares(book.id_libro) : null;
   const main = ctx.render(view.detail(book, { canEdit, canLocate: session.can('buscar'), canWait: canWait(), ejemplares }));
   if (!main || !canEdit) return;
+  /**
+   * Vuelve a cargar la ficha actual.
+   * @returns {Promise<void>}
+   */
   const refresh = () => detail(params, ctx);
+  /**
+   * Obtiene la ficha/etiquetas del libro actual.
+   * @returns {Promise<Object>}
+   */
   const etiqueta = () => model.etiqueta(book.id_libro);
   onAction(main, {
+    /**
+     * Acción `baja`: valida el motivo, confirma y da de baja el ejemplar.
+     * @param {HTMLElement} button - Botón con `data-id` y `data-etiqueta`.
+     * @returns {Promise<void>}
+     */
     baja: async (button) => {
       const { id, etiqueta: tag } = button.dataset;
       const select = $(`[data-motivo="${id}"]`, main);
@@ -65,6 +106,11 @@ async function detail(params, ctx) {
       setFlash(`Ejemplar ${tag} dado de baja.`);
       await refresh();
     },
+    /**
+     * Acción `reactivar`: confirma y reactiva el ejemplar.
+     * @param {HTMLElement} button - Botón con `data-id` y `data-etiqueta`.
+     * @returns {Promise<void>}
+     */
     reactivar: async (button) => {
       const { id, etiqueta: tag } = button.dataset;
       if (!(await confirmAction({ title: 'Reactivar ejemplar', confirmLabel: 'Reactivar', variant: 'primary',
@@ -73,7 +119,15 @@ async function detail(params, ctx) {
       setFlash(`Ejemplar ${tag} reactivado.`);
       await refresh();
     },
+    /**
+     * Acción `imprimir`: imprime la ficha con etiquetas.
+     * @returns {Promise<void>}
+     */
     imprimir: async () => printHtml(view.fichaBlock(await etiqueta())),
+    /**
+     * Acción `pdf`: descarga la ficha con etiquetas como PDF.
+     * @returns {Promise<void>}
+     */
     pdf: async () => {
       const e = await etiqueta();
       downloadPdf(view.pdfLines(e), `ficha-${e.clave}.pdf`);
@@ -92,10 +146,22 @@ async function detail(params, ctx) {
   });
 }
 
+/**
+ * Ruta `#/libros/pendientes` (permiso `catalogo`): compras recibidas pendientes de catalogar.
+ * @param {Object} params - Parámetros de ruta (sin uso).
+ * @param {Object} ctx - Contexto del router.
+ * @returns {Promise<void>}
+ */
 async function pendientes(params, ctx) {
   await listPage(ctx, { markup: view.pendientesPage(), load: model.pendientes, render: view.pendientesRows });
 }
 
+/**
+ * Ruta `#/libros/importar` (permiso `catalogo`): importación masiva desde CSV.
+ * @param {Object} params - Parámetros de ruta (sin uso).
+ * @param {Object} ctx - Contexto del router.
+ * @returns {void}
+ */
 function importar(params, ctx) {
   const main = ctx.render(view.importPage());
   if (!main) return;
@@ -108,8 +174,18 @@ function importar(params, ctx) {
 }
 
 // ---- Public search (buscar), mobile mode and floor plan ----
+/**
+ * Filtros vigentes de la búsqueda pública.
+ * @type {Object}
+ */
 const searchFilters = { q: '', campo: '', tema: '', tipo_uso: '', disponibilidad: '' };
 
+/**
+ * Rutas `#/buscar` y `#/movil` (permiso `buscar`): búsqueda pública, en modo escritorio o móvil (`ctx.mobile`).
+ * @param {Object} params - Parámetros de ruta (sin uso).
+ * @param {Object} ctx - Contexto del router; `mobile` activa el modo móvil.
+ * @returns {Promise<void>}
+ */
 async function search(params, ctx) {
   const mobile = ctx.mobile;
   const themes = mobile ? [] : await model.themes();
@@ -121,10 +197,25 @@ async function search(params, ctx) {
   });
 }
 
+/**
+ * Fábrica de la ruta de ubicación física del libro (`#/libros/:id/ubicacion`, `#/movil/:id`; permiso `buscar`).
+ * @param {boolean} mobile - True para la versión móvil.
+ * @returns {function(Object, Object): Promise<void>} Acción de ruta.
+ */
 const locate = (mobile) => async (params, ctx) => {
   ctx.render(view.locationPage(await model.get(params.id), mobile));
 };
+/**
+ * Ruta `#/movil` (permiso `buscar`): búsqueda en modo móvil.
+ * @param {Object} params - Parámetros de ruta.
+ * @param {Object} ctx - Contexto del router.
+ * @returns {Promise<void>}
+ */
 const searchMobile = (params, ctx) => search(params, Object.assign(ctx, { mobile: true }));
+/**
+ * Rutas del módulo: catalogo, libros/nuevo, libros/pendientes, libros/importar, libros/:id, libros/:id/editar, buscar, movil, movil/:id, libros/:id/ubicacion.
+ * @type {Array<Object>}
+ */
 export const routes = [
   { path: 'catalogo', perm: 'catalogo', section: 'catalogo', action: list },
   { path: 'libros/nuevo', perm: 'catalogo', section: 'catalogo', action: edit },

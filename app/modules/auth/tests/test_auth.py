@@ -1,7 +1,9 @@
+"""Pruebas de auth (RNF-01, D-26, PS-S4-03): login, sesion, visitante, recuperacion de contrasena, `DEMO_MOSTRAR_TOKEN` y banderas de cookie de sesion."""
 from app.testing import login, sql, user_payload
 
 
 def test_login_ok(anon):
+    """Login valido (matricula sin distinguir mayusculas) devuelve el usuario publico con permisos y abre sesion."""
     r = login(anon, "adm001", "Admin123")
     assert r.status_code == 200
     u = r.get_json()["user"]
@@ -11,12 +13,14 @@ def test_login_ok(anon):
 
 
 def test_login_fail(anon):
+    """Contrasena incorrecta o matricula inexistente responden 401 con el mismo mensaje."""
     r = login(anon, "ADM001", "mala")
     assert r.status_code == 401 and r.get_json()["error"] == "Clave o contraseña incorrecta"
     assert login(anon, "NOEXISTE", "x").status_code == 401
 
 
 def test_login_inactive(anon, admin):
+    """Una cuenta inactiva no inicia sesion (403)."""
     p = user_payload(estado="inactivo")
     assert admin.post("/api/usuarios", json=p).status_code == 201
     r = login(anon, p["matricula"], p["password"])
@@ -24,10 +28,12 @@ def test_login_inactive(anon, admin):
 
 
 def test_me_requires_login(anon):
+    """`/api/me` sin sesion responde 401."""
     assert anon.get("/api/me").status_code == 401
 
 
 def test_logout_and_bitacora(app):
+    """El logout invalida la sesion y `login`/`logout` quedan en bitacora."""
     from app.testing import client_as
     c = client_as(app, "A0512345", "Alumno123")
     assert c.post("/api/logout").get_json() == {"ok": True}
@@ -38,6 +44,7 @@ def test_logout_and_bitacora(app):
 
 
 def test_visitante(anon):
+    """La sesion de visitante tiene solo permisos de busqueda y no accede a usuarios (D-26)."""
     u = anon.post("/api/visitante").get_json()["user"]
     assert u["rol"] == "visitante" and u["id_usuario"] is None and u["matricula"] == "VISITANTE"
     assert "buscar" in u["permisos"] and "usuarios" not in u["permisos"]
@@ -46,6 +53,7 @@ def test_visitante(anon):
 
 
 def test_recuperar_password(anon, admin):
+    """Flujo de recuperacion: correo desconocido, token de un solo uso, contrasena minima de 6 y nuevo login."""
     p = user_payload()
     admin.post("/api/usuarios", json=p)
     assert anon.post("/api/recuperar", json={"correo": "nadie@x.com"}).get_json() == {"ok": True, "token": None}
@@ -60,6 +68,7 @@ def test_recuperar_password(anon, admin):
 
 # ---- Seguridad (PS-S4-03 / PS-NFR-05): DEMO_MOSTRAR_TOKEN y cookie de sesion ----
 def test_demo_mostrar_token_apagado_no_revela_codigo(anon, admin, app):
+    """Con `DEMO_MOSTRAR_TOKEN` apagado la respuesta no revela el codigo, que solo llega por el correo simulado."""
     p = user_payload()
     assert admin.post("/api/usuarios", json=p).status_code == 201
     app.config["DEMO_MOSTRAR_TOKEN"] = False
@@ -76,6 +85,7 @@ def test_demo_mostrar_token_apagado_no_revela_codigo(anon, admin, app):
 
 
 def test_bandera_https_y_cookie(monkeypatch):
+    """La cookie es HttpOnly/SameSite=Lax y `_bandera` interpreta correctamente las variables de entorno."""
     from app import config
     assert config.Config.SESSION_COOKIE_HTTPONLY is True and config.Config.SESSION_COOKIE_SAMESITE == "Lax"
     monkeypatch.setenv("X_BANDERA", "true")

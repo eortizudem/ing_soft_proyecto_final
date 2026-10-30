@@ -1,13 +1,17 @@
+"""Pruebas de API de `usuarios`: permisos, CRUD, validación, unicidad y guardas de baja/último admin (RF-01, RF-03, D-24)."""
+
 from app.testing import make_loan, sql, user_payload, libro_payload
 
 
 def test_permission_403(alumno, anon):
+    """Sin permiso `usuarios` responde 403 y sin sesión 401."""
     assert alumno.get("/api/usuarios").status_code == 403
     assert alumno.post("/api/usuarios", json=user_payload()).status_code == 403
     assert anon.get("/api/usuarios").status_code == 401
 
 
 def test_crud(admin):
+    """Alta, edición, consulta y filtros de una cuenta funcionan de punta a punta."""
     p = user_payload()
     r = admin.post("/api/usuarios", json=p)
     assert r.status_code == 201
@@ -24,6 +28,7 @@ def test_crud(admin):
 
 
 def test_validation_and_duplicates(admin):
+    """Rechaza datos inválidos y matrícula/correo duplicados."""
     p = user_payload()
     assert admin.post("/api/usuarios", json=p).status_code == 201
     assert admin.post("/api/usuarios", json=user_payload(matricula=p["matricula"])).status_code == 400
@@ -36,12 +41,14 @@ def test_validation_and_duplicates(admin):
 
 
 def test_matricula_uppercased(admin):
+    """La matrícula se normaliza a mayúsculas."""
     p = user_payload()
     p["matricula"] = p["matricula"].lower()
     assert admin.post("/api/usuarios", json=p).get_json()["matricula"] == p["matricula"].upper()
 
 
 def test_cannot_touch_own_account_or_last_admin(admin):
+    """No se puede dar de baja, cambiar matrícula ni quitar la administración de la propia cuenta."""
     me = [u for u in admin.get("/api/usuarios?q=ADM001").get_json() if u["matricula"] == "ADM001"][0]
     r = admin.post(f"/api/usuarios/{me['id_usuario']}/toggle")
     assert r.status_code == 400
@@ -65,6 +72,7 @@ def test_last_admin_protected(app, admin):
 
 
 def test_toggle_blocked_with_loans_and_fines(admin):
+    """No se da de baja una cuenta con préstamos abiertos o multas pendientes."""
     p = user_payload()
     u = admin.post("/api/usuarios", json=p).get_json()
     lib = admin.post("/api/libros", json=libro_payload()).get_json()

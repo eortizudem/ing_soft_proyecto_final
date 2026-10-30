@@ -44,12 +44,14 @@ def table_columns(table):
 
 
 def _check_columns(table, names):
+    """Lanza ValueError si alguna de `names` no es columna real de `table` (lista blanca)."""
     unknown = set(names) - table_columns(table)
     if unknown:
         raise ValueError(f"Columnas desconocidas en {table}: {sorted(unknown)}")
 
 
 def _returning(returning):
+    """Fragmento ` RETURNING ...` a partir de None/'*'/columna/lista de columnas (vacio si falsy)."""
     if not returning:
         return sql.SQL("")
     cols = sql.SQL("*") if returning == "*" else sql.SQL(", ").join(
@@ -93,6 +95,7 @@ def update(table, pk_col, id_, data, returning="*"):
 
 
 def _run(query, params, returning):
+    """Ejecuta `query`: con `returning` devuelve la fila; si no, solo ejecuta y devuelve None."""
     if returning:
         return fetch_one(query, params)
     execute(query, params)
@@ -140,6 +143,7 @@ def build_where(filters=None, search=None):
 
 
 def _order_by(order):
+    """Fragmento ` ORDER BY` validado con `_ORDER` (columna [ASC|DESC]); ValueError si algun item no es valido."""
     if not order:
         return sql.SQL("")
     items = []

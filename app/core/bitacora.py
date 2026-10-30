@@ -16,6 +16,7 @@ def log(id_usuario, accion, detalle=""):
 
 
 def _call(fn, result, args):
+    """Invoca `fn(result)` o `fn(result, args)` segun cuantos parametros declare."""
     return fn(result, args) if len(inspect.signature(fn).parameters) > 1 else fn(result)
 
 
@@ -30,10 +31,12 @@ def audit(accion, detail=None, actor_arg="actor"):
     """
 
     def deco(fn):
+        """Envuelve `fn` para registrar la bitacora tras una ejecucion exitosa."""
         sig = inspect.signature(fn)
 
         @wraps(fn)
         def wrapper(*a, **kw):
+            """Ejecuta `fn`; si no lanza y hay actor, escribe en bitacora y devuelve el resultado."""
             result = fn(*a, **kw)
             args = sig.bind(*a, **kw).arguments
             actor = args.get(actor_arg)

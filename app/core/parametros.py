@@ -7,6 +7,7 @@ from ..config import Config
 
 
 def _get(nombre):
+    """Valor del parametro: `current_app.config` si hay contexto de app; si no, el valor de `Config`."""
     return current_app.config.get(nombre, getattr(Config, nombre)) if has_app_context() else getattr(Config, nombre)
 
 

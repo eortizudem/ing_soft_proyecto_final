@@ -1,3 +1,4 @@
+/** @module modules/reportes/controller — rutas de reportes (selección de tipo y vista previa/PDF/impresión) */
 import * as session from '/js/core/session.js';
 import { go } from '/js/core/router.js';
 import { $, toast } from '/js/core/ui.js';
@@ -7,13 +8,27 @@ import * as model from './model.js';
 import * as view from './view.js';
 
 // Los tipos con datos personales o de circulación piden además su permiso (usuarios / prestamos).
+/**
+ * Tipos de reporte visibles para el usuario (según permisos extra).
+ * @returns {string[]} Claves de tipo.
+ */
 const available = () => Object.keys(model.TYPES).filter((t) => !model.EXTRA_PERMISSION[t] || session.can(model.EXTRA_PERMISSION[t]));
 
+/**
+ * Ruta `#/reportes` (permiso `reportes`): formulario de tipo y filtros; muestra solo los filtros que aplican.
+ * @param {Object} params - Parámetros de ruta (sin uso).
+ * @param {Object} ctx - Contexto del router.
+ * @returns {Promise<void>}
+ */
 async function index(params, ctx) {
   const main = ctx.render(view.indexPage(available()));
   if (!main) return;
   const form = $('#report-form', main);
   // Solo se muestran los filtros que aplican al tipo elegido (model.FILTERS).
+  /**
+   * Muestra solo los filtros del tipo elegido.
+   * @returns {void}
+   */
   const showFilters = () => {
     const applies = model.FILTERS[form.elements.tipo.value] || [];
     for (const el of Array.from(form.elements)) {
@@ -25,6 +40,12 @@ async function index(params, ctx) {
   bindForm(form, { onSubmit: (values) => go(model.reportPath(values.tipo, values)) });
 }
 
+/**
+ * Ruta `#/reportes/:tipo` (permiso `reportes`): vista previa con PDF, impresión y aviso (con_adeudos). Filtros en `ctx.query`.
+ * @param {{tipo: string}} params - Parámetros de ruta.
+ * @param {Object} ctx - Contexto del router.
+ * @returns {Promise<void>}
+ */
 async function preview(params, ctx) {
   const { tipo } = params;
   const filters = ctx.query;
@@ -50,6 +71,10 @@ async function preview(params, ctx) {
   });
 }
 
+/**
+ * Rutas del módulo: reportes y reportes/:tipo (permiso `reportes`).
+ * @type {Array<Object>}
+ */
 export const routes = [
   { path: 'reportes', perm: 'reportes', section: 'reportes', action: index },
   { path: 'reportes/:tipo', perm: 'reportes', section: 'reportes', action: preview },

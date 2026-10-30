@@ -1,35 +1,47 @@
+# Stack de LibriGest: db (PostgreSQL) + web (Flask/gunicorn). Variables con valor por defecto; se pueden fijar en .env.
 services:
+  # Base de datos PostgreSQL; al crear el volumen por primera vez aplica db/*.sql (esquema y datos base)
   db:
     image: postgres:16-alpine
     restart: unless-stopped  # RNF-12: vuelve solo tras un fallo o reinicio del servidor
     command: ["postgres", "-c", "timezone=${TZ:-America/Mexico_City}"]  # fechas locales: el navegador muestra la hora sin desfase
+    # Credenciales/base iniciales de PostgreSQL (solo se aplican al inicializar el volumen)
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-librigest}
       POSTGRES_USER: ${POSTGRES_USER:-librigest}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-librigest}
     volumes:
+      # Datos persistentes de PostgreSQL (volumen con nombre, ver seccion volumes al final)
       - pgdata:/var/lib/postgresql/data
+      # Scripts de inicializacion: se ejecutan en orden alfabetico solo con el volumen vacio (recrear_db.py los reaplica)
       - ./db:/docker-entrypoint-initdb.d:ro
       - ./backups:/backups  # RNF-02: destino de respaldos (scripts/respaldo.py escribe aqui desde el host)
+    # Listo cuando pg_isready conecta; web espera este estado (depends_on: service_healthy)
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 3s
       timeout: 3s
       retries: 20
 
+  # Aplicacion Flask (API + frontend estatico) construida con el Dockerfile local
   web:
     build:
       context: .
       dockerfile: Dockerfile
     restart: unless-stopped
+    # host:contenedor; la app queda en http://localhost:8000
     ports:
       - "8000:8000"
+    # No arranca hasta que PostgreSQL pase su healthcheck
     depends_on:
       db:
         condition: service_healthy
+    # Configuracion de la aplicacion (ver app/config.py)
     environment:
       TZ: ${TZ:-America/Mexico_City}
+      # Cadena de conexion a PostgreSQL por la red interna de compose (host db)
       DATABASE_URL: postgresql://${POSTGRES_USER:-librigest}:${POSTGRES_PASSWORD:-librigest}@db:5432/${POSTGRES_DB:-librigest}
+      # Clave de firma de sesiones: CAMBIAR en cualquier entorno que no sea de desarrollo
       SECRET_KEY: ${SECRET_KEY:-dev-secret-change-me}
       # Parametros de negocio; mismos valores por defecto que app/config.py
       TIPO_CAMBIO_USD_MXN: ${TIPO_CAMBIO_USD_MXN:-18.00}
@@ -39,6 +51,7 @@ services:
       WEB_CONCURRENCY: ${WEB_CONCURRENCY:-4}  # procesos de gunicorn (una por nucleo)
       DEMO_MOSTRAR_TOKEN: ${DEMO_MOSTRAR_TOKEN:-true}
       HTTPS: ${HTTPS:-false}
+    # Mismo chequeo que el HEALTHCHECK del Dockerfile (GET /api/health); start_period da tiempo a gunicorn
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=3)"]
       interval: 10s
@@ -46,5 +59,6 @@ services:
       retries: 5
       start_period: 15s
 
+# Volumen con nombre: sobrevive a `docker compose down` (se borra solo con `down -v`)
 volumes:
   pgdata:

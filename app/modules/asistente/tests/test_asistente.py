@@ -1,3 +1,4 @@
+"""Pruebas de integracion del asistente (RF-29..RF-33, D-13, RNF-13): deteccion de intenciones, respuestas con politica real, busqueda de libros, estatus propio, escalamiento a bibliotecario, opinion, aislamiento de conversaciones y latencia."""
 import time
 
 import pytest
@@ -6,34 +7,40 @@ from app.testing import make_book, make_loan, make_user, sql, uniq
 
 
 def say(client, texto, cid=None, **extra):
+    """Envia un mensaje al asistente, exige 200 y devuelve el JSON."""
     r = client.post("/api/asistente/mensajes", json={"texto": texto, "id_conversacion": cid, **extra})
     assert r.status_code == 200, r.get_json()
     return r.get_json()
 
 
 def intencion(client, texto):
+    """Devuelve la intencion detectada para un mensaje."""
     return say(client, texto)["respuesta"]["intencion"]
 
 
 @pytest.fixture
 def usuario(login_as):
+    """Fixture: usuario nuevo con sesion iniciada; devuelve `(usuario, cliente)`."""
     u = make_user()
     return u, login_as(u["matricula"], u["password"])
 
 
 @pytest.fixture
 def visitante(anon):
+    """Fixture: cliente con sesion de visitante."""
     assert anon.post("/api/visitante").status_code == 200
     return anon
 
 
 def test_permisos(anon, alumno):
+    """Sin sesion 401; el alumno no accede a las consultas ni a resolver (403, solo `prestamos`)."""
     assert anon.post("/api/asistente/mensajes", json={"texto": "hola"}).status_code == 401
     assert alumno.get("/api/asistente/consultas").status_code == 403
     assert alumno.post("/api/asistente/consultas/1/resolver", json={"respuesta": "x"}).status_code == 403
 
 
 def test_validacion(alumno):
+    """Rechaza texto vacio o de mas de 500 caracteres, canal invalido (400) y conversacion inexistente (404)."""
     assert alumno.post("/api/asistente/mensajes", json={"texto": ""}).status_code == 400
     assert alumno.post("/api/asistente/mensajes", json={"texto": "x" * 501}).status_code == 400
     assert alumno.post("/api/asistente/mensajes", json={"texto": "hola", "canal": "fax"}).status_code == 400
@@ -41,17 +48,20 @@ def test_validacion(alumno):
 
 
 def test_saludo_ayuda_despedida(alumno):
+    """Detecta las intenciones saludo, ayuda y despedida."""
     assert intencion(alumno, "Hola, buenos días") == "saludo"
     assert intencion(alumno, "¿Qué puedes hacer?") == "ayuda"
     assert intencion(alumno, "Gracias, adiós") == "despedida"
 
 
 def test_horarios(alumno):
+    """La pregunta por la hora de apertura responde con la FAQ de horarios."""
     r = say(alumno, "¿A qué hora abre la biblioteca?")["respuesta"]
     assert r["intencion"] == "horarios" and "8:00" in r["texto"]
 
 
 def test_reglas_reflejan_politica(alumno):
+    """Las reglas explicadas leen `politica_prestamo` vigente y reflejan sus cambios (RF-32)."""
     r = say(alumno, "¿Cuántos libros puedo llevar en préstamo?")["respuesta"]
     assert r["intencion"] == "prestamo" and "2 libros" in r["texto"] and "5 días hábiles" in r["texto"]
     try:
@@ -66,17 +76,20 @@ def test_reglas_reflejan_politica(alumno):
 
 
 def test_renovacion_y_perdida(alumno):
+    """Explica la renovacion y, ante una perdida, la reposicion del libro."""
     r = say(alumno, "¿Cómo renuevo mi libro?")["respuesta"]
     assert r["intencion"] == "renovacion" and "2" in r["texto"] and "periodo completo" in r["texto"]
     assert "reposición" in say(alumno, "Si pierdo un libro, ¿cuánto pago?")["respuesta"]["texto"]
 
 
 def test_visitante_reglas_generales(visitante):
+    """El visitante recibe las politicas de todos los roles (D-26)."""
     r = say(visitante, "politicas de prestamo")["respuesta"]
     assert "Alumno" in r["texto"] and "Docente" in r["texto"]
 
 
 def test_busqueda_con_resultados_sin_acentos_y_mayusculas(alumno):
+    """La busqueda de libros ignora acentos y mayusculas, devuelve disponibilidad y ubicacion y limita a 5 (RF-30)."""
     tag = uniq().lower()
     libro = make_book(titulo=f"Termodinámica {tag}", ejemplares=2)
     for texto in (f"Busco libros de TERMODINAMICA {tag}", f"tienen termodinámica {tag}?", f"donde esta {libro['clave']}"):
@@ -88,16 +101,19 @@ def test_busqueda_con_resultados_sin_acentos_y_mayusculas(alumno):
 
 
 def test_busqueda_sin_resultados(alumno):
+    """Si no hay libros avisa 'No encontre' sin lista de libros."""
     r = say(alumno, "busco el libro zzqxwv inexistente")["respuesta"]
     assert r["intencion"] == "buscar_libro" and not r.get("libros") and "No encontré" in r["texto"]
 
 
 def test_busco_un_libro_sin_termino_pide_el_titulo(alumno):
+    """'Busco un libro' sin titulo/autor/tema pide el dato en lugar de responder una FAQ."""
     r = say(alumno, "Busco un libro")["respuesta"]
     assert r["intencion"] == "buscar_libro" and "título, autor o tema" in r["texto"]
 
 
 def test_estatus_propio(usuario):
+    """Estatus propio de prestamos (activo y vencido) y de multas pendientes (RF-31)."""
     u, c = usuario
     assert "No tienes préstamos" in say(c, "¿cuáles son mis préstamos?")["respuesta"]["texto"]
     libro = make_book(titulo=f"Libro prestado {uniq()}", ejemplares=1)
@@ -112,12 +128,14 @@ def test_estatus_propio(usuario):
 
 
 def test_visitante_sin_estatus(visitante):
+    """El visitante que consulta su estatus recibe la indicacion de iniciar sesion (D-26)."""
     r = say(visitante, "mis prestamos")["respuesta"]
     assert r["intencion"] == "estatus_prestamos" and "iniciar sesión" in r["texto"]
     assert "iniciar sesión" in say(visitante, "tengo multas?")["respuesta"]["texto"]
 
 
 def test_mensajes_persisten_con_intencion(alumno):
+    """Los mensajes de usuario y asistente se guardan con su intencion y la conversacion es recuperable."""
     out = say(alumno, "cual es el horario")
     cid = out["id_conversacion"]
     filas = sql("SELECT m.emisor, i.nombre FROM mensaje m JOIN intencion i USING (id_intencion) "
@@ -129,6 +147,7 @@ def test_mensajes_persisten_con_intencion(alumno):
 
 
 def test_paso_explicito_y_resolucion(usuario, bibliotecario):
+    """Flujo completo de escalamiento: pedir bibliotecario, listar pendientes, responder, resolver (409 si repite) y auditar (RF-33)."""
     u, c = usuario
     out = say(c, "Quiero hablar con un bibliotecario")
     cid, r = out["id_conversacion"], out["respuesta"]
@@ -151,12 +170,14 @@ def test_paso_explicito_y_resolucion(usuario, bibliotecario):
 
 
 def test_resolver_inexistente_o_no_pasada(bibliotecario, alumno):
+    """El bibliotecario no ve ni resuelve conversaciones que no fueron escaladas (404)."""
     cid = say(alumno, "hola")["id_conversacion"]
     assert bibliotecario.post(f"/api/asistente/consultas/{cid}/resolver", json={"respuesta": "x"}).status_code == 404
     assert bibliotecario.get(f"/api/asistente/conversaciones/{cid}").status_code == 404
 
 
 def test_no_entendido_dos_veces_pasa_a_bibliotecario(alumno):
+    """Dos mensajes `no_entendido` seguidos escalan automaticamente a bibliotecario."""
     a = say(alumno, "qwerty asdf zxcv")
     assert a["respuesta"]["intencion"] == "no_entendido" and not a["respuesta"]["con_bibliotecario"]
     b = say(alumno, "zzz yyy xxx", a["id_conversacion"])
@@ -164,6 +185,7 @@ def test_no_entendido_dos_veces_pasa_a_bibliotecario(alumno):
 
 
 def test_calificacion(alumno, alumno2):
+    """Valida la calificacion 1-5, la guarda y impide que otro usuario califique la conversacion."""
     cid = say(alumno, "hola")["id_conversacion"]
     assert alumno.post(f"/api/asistente/conversaciones/{cid}/opinion", json={"calificacion": 6}).status_code == 400
     assert alumno.post(f"/api/asistente/conversaciones/{cid}/opinion", json={}).status_code == 400
@@ -173,6 +195,7 @@ def test_calificacion(alumno, alumno2):
 
 
 def test_calificar_consulta_no_la_cierra(alumno, bibliotecario):
+    """Marcar 'resuelta' en una consulta escalada no la cierra: solo la cierra el bibliotecario."""
     cid = say(alumno, "quiero hablar con un bibliotecario")["id_conversacion"]
     r = alumno.post(f"/api/asistente/conversaciones/{cid}/opinion", json={"calificacion": 2, "resuelta": True})
     assert r.get_json()["resuelta"] is False
@@ -180,6 +203,7 @@ def test_calificar_consulta_no_la_cierra(alumno, bibliotecario):
 
 
 def test_aislamiento(alumno, alumno2, visitante):
+    """Cada usuario o visitante solo accede a sus propias conversaciones."""
     cid = say(alumno, "hola")["id_conversacion"]
     assert alumno2.get(f"/api/asistente/conversaciones/{cid}").status_code == 404
     assert alumno2.post("/api/asistente/mensajes", json={"texto": "hola", "id_conversacion": cid}).status_code == 404
@@ -191,6 +215,7 @@ def test_aislamiento(alumno, alumno2, visitante):
 
 
 def test_latencia(alumno):
+    """Dos consultas (busqueda y reglas) responden en menos de 3 segundos (RNF-13)."""
     t = time.perf_counter()
     say(alumno, "busco libros de ingenieria de software")
     say(alumno, "reglas de préstamo")

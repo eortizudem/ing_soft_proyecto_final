@@ -1,3 +1,9 @@
+"""Capa servicio de compras: reglas de negocio de solicitudes de compra.
+
+Presupuesto mensual (RF-05, D-22), ciclo pendiente -> enviada -> recibida/cancelada y recepción parcial o
+total con factura (RF-06, D-25), con aviso a Tesorería. Lanza `ApiError`.
+"""
+
 from datetime import date
 from decimal import Decimal
 
@@ -39,7 +45,17 @@ RECIBIR_PEDIDO = {
 
 
 def _mes(valor):
-    """'YYYY-MM' (o None = mes actual) -> date del primer dia."""
+    """Convierte 'AAAA-MM' (o vacío = mes actual) en la fecha del primer día del mes.
+
+    Args:
+        valor (str | None): Mes en formato AAAA-MM.
+
+    Returns:
+        date: Primer día del mes.
+
+    Raises:
+        ApiError: 400 si el formato no es AAAA-MM.
+    """
     if valor in (None, ""):
         h = model.hoy()
         return h.replace(day=1)
@@ -51,7 +67,17 @@ def _mes(valor):
 
 
 def presupuesto(mes=None):
-    """RF-05/D-22: presupuesto del mes, usado (no canceladas) y disponible."""
+    """RF-05/D-22: presupuesto del mes, usado (no canceladas) y disponible.
+
+    Args:
+        mes (str | None): Mes AAAA-MM; None = mes actual.
+
+    Returns:
+        dict: {mes, presupuesto_usd, usado_usd, disponible_usd}.
+
+    Raises:
+        ApiError: 400 si el mes tiene formato inválido.
+    """
     d = _mes(mes)
     total = parametros.presupuesto_mensual()
     usado = Decimal(model.usado_mes(d))
@@ -60,15 +86,43 @@ def presupuesto(mes=None):
 
 
 def listar():
+    """Lista las solicitudes de compra con sus detalles (RF-05).
+
+    Returns:
+        list[dict]: Solicitudes.
+    """
     return model.list_()
 
 
 def obtener(id_solicitud):
+    """Obtiene una solicitud o lanza 404.
+
+    Args:
+        id_solicitud (int): Id de la solicitud.
+
+    Returns:
+        dict: La solicitud con detalles.
+
+    Raises:
+        ApiError: 404 si no existe.
+    """
     return or_404(model.get(id_solicitud), "No se encontró la solicitud.")
 
 
 @audit("compra_crear", lambda s: f"Solicitud {s['folio']} por ${s['total_estimado']}")
 def crear(d, actor):
+    """Crea una solicitud pendiente validando contra el presupuesto mensual (RF-05, D-22). Bitácora: `compra_crear`.
+
+    Args:
+        d (dict): Payload {justificacion, destinatario?, detalles: [{descripcion, cantidad, precio_unitario}]}.
+        actor (dict): Usuario solicitante.
+
+    Returns:
+        dict: Solicitud creada con folio.
+
+    Raises:
+        ApiError: 400 por validación o total excedido; motivo `PRESUPUESTO_EXCEDIDO` si el total supera el disponible del mes.
+    """
     data = validate(d, SCHEMA)
     total = sum((x["cantidad"] * x["precio_unitario"] for x in data["detalles"]), Decimal(0))
     if total > MAX_TOTAL:
@@ -87,6 +141,18 @@ def crear(d, actor):
 
 @audit("compra_enviar", lambda s: f"Solicitud {s['folio']} enviada a {s['destinatario']}")
 def enviar(id_solicitud, actor):
+    """Marca una solicitud pendiente como enviada. Bitácora: `compra_enviar`.
+
+    Args:
+        id_solicitud (int): Id de la solicitud.
+        actor (dict): Usuario que realiza la acción.
+
+    Returns:
+        dict: Solicitud actualizada.
+
+    Raises:
+        ApiError: 404 si no existe; 400 si no está pendiente.
+    """
     s = obtener(id_solicitud)
     if s["estado"] != "pendiente":
         raise ApiError("Solo se pueden enviar solicitudes pendientes.")
@@ -96,6 +162,18 @@ def enviar(id_solicitud, actor):
 
 @audit("compra_cancelar", lambda s: f"Solicitud {s['folio']} cancelada")
 def cancelar(id_solicitud, actor):
+    """Cancela una solicitud pendiente o enviada sin pedidos recibidos (libera presupuesto). Bitácora: `compra_cancelar`.
+
+    Args:
+        id_solicitud (int): Id de la solicitud.
+        actor (dict): Usuario que realiza la acción.
+
+    Returns:
+        dict: Solicitud cancelada.
+
+    Raises:
+        ApiError: 404 si no existe; 409 si el estado no lo permite o ya hay pedidos recibidos.
+    """
     s = obtener(id_solicitud)
     if s["estado"] not in ("pendiente", "enviada"):
         raise ApiError("Solo se pueden cancelar solicitudes pendientes o enviadas.", 409)
@@ -107,7 +185,23 @@ def cancelar(id_solicitud, actor):
 
 @audit("compra_recibir", lambda s: f"Solicitud {s['folio']} factura {s['factura_folio']} ({s['estado']})")
 def recibir(id_solicitud, d, actor):
-    """RF-06/D-25: recibir el pedido (parcial o total) con factura; ejemplares para lineas con libro."""
+    """RF-06/D-25: recibir el pedido (parcial o total) con factura; ejemplares para líneas con libro.
+
+    Las líneas sin libro se devuelven en `pendientes_catalogar`. Al completar todas las líneas la solicitud pasa a
+    'recibida'; avisa a Tesorería de la factura. Bitácora: `compra_recibir`.
+
+    Args:
+        id_solicitud (int): Id de la solicitud.
+        d (dict): Payload {factura_folio, factura_total, fecha_recepcion?, lineas: [{id_detalle, cantidad_recibida}]}.
+        actor (dict): Usuario que realiza la acción.
+
+    Returns:
+        dict: Solicitud con `pendientes_catalogar`.
+
+    Raises:
+        ApiError: 404 si no existe; 409 si no está enviada; 400 por validación, fecha futura, líneas ajenas o
+            repetidas, sin ejemplares recibidos o cantidad recibida mayor a la pedida.
+    """
     s = obtener(id_solicitud)
     if s["estado"] != "enviada":
         raise ApiError("Solo se pueden recibir solicitudes enviadas.", 409)

@@ -1,3 +1,5 @@
+"""Pruebas de API de `inicio`: estadísticas del tablero por tipo de usuario (D-22, D-24)."""
+
 from app.testing import make_book, make_loan, make_user, sql
 
 GLOBAL = {"usuarios_activos", "titulos_activos", "compras_pendientes", "prestamos_activos", "prestamos_vencidos",
@@ -5,6 +7,7 @@ GLOBAL = {"usuarios_activos", "titulos_activos", "compras_pendientes", "prestamo
 
 
 def test_stats(admin, anon):
+    """`/api/stats` exige sesión y el admin recibe conteos globales, `mio` y presupuesto."""
     assert anon.get("/api/stats").status_code == 401
     j = admin.get("/api/stats").get_json()
     assert GLOBAL <= set(j) and {"mio", "presupuesto_mensual_usd", "presupuesto_usado_usd"} <= set(j)
@@ -13,12 +16,14 @@ def test_stats(admin, anon):
 
 
 def test_stats_personal_y_roles(bibliotecario, comprador, alumno):
+    """El personal recibe conteos globales o presupuesto según permisos; el alumno solo `mio`."""
     assert GLOBAL <= set(bibliotecario.get("/api/stats").get_json())
     assert "presupuesto_mensual_usd" in comprador.get("/api/stats").get_json()
     assert set(alumno.get("/api/stats").get_json()) == {"mio"}
 
 
 def test_stats_vencidos_siguen_d24(admin):
+    """Un préstamo con fecha vencida cuenta como vencido aunque su estado siga 'activo' (D-24)."""
     antes = admin.get("/api/stats").get_json()["prestamos_vencidos"]
     p = make_loan(make_user()["id_usuario"], make_book()["id_libro"])
     sql("UPDATE prestamo SET fecha_vencimiento=CURRENT_DATE-1 WHERE id_prestamo=%s", (p,))  # estado sigue 'activo'
@@ -26,6 +31,7 @@ def test_stats_vencidos_siguen_d24(admin):
 
 
 def test_estado_propio(app):
+    """`mio` refleja préstamos, vencidos, adeudos y próximo vencimiento del propio usuario."""
     from app.testing import client_as
 
     u = make_user()

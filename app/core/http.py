@@ -29,11 +29,14 @@ def created(data):
 
 
 def _to_bool(raw):
+    """'1'/'true' (sin distinguir mayusculas) -> True; cualquier otro texto -> False."""
     return raw.strip().lower() in ("1", "true")
 
 
 def _to_int(default):
+    """Fabrica un conversor a entero que devuelve `default` si el texto no es numerico."""
     def conv(raw):
+        """Convierte `raw` a int o devuelve el valor por defecto."""
         try:
             return int(raw)
         except ValueError:

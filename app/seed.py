@@ -67,6 +67,10 @@ def _prestar(matricula, clave, dias_atras=2, devuelto_tarde=0):
 
 
 def _compra(folio, comprador, justificacion, fecha, estado, lineas, extra=None):
+    """Inserta una solicitud de compra demo con sus lineas `(descripcion, cantidad, precio_usd, recibida)`.
+
+    `extra` = `(factura_folio, factura_total, fecha_recepcion)`; sin el, esos campos quedan NULL.
+    """
     total = sum(c * p for _, c, p, _ in lineas)
     sol = db.fetchone(
         """INSERT INTO solicitud_compra(folio,id_usuario,justificacion,destinatario,fecha,total_estimado,estado,
@@ -81,6 +85,17 @@ def _compra(folio, comprador, justificacion, fecha, estado, lineas, extra=None):
 
 
 def seed_if_empty(app):
+    """Carga usuarios, prestamos y compras demo solo si la tabla `usuario` esta vacia (idempotente).
+
+    Corre en una transaccion con un candado asesor (`pg_advisory_xact_lock`) para que varios procesos al arrancar
+    no dupliquen la semilla; ante cualquier error hace rollback y relanza.
+
+    Args:
+        app: aplicacion Flask (se usa su contexto para obtener la conexion).
+
+    Returns:
+        True si aplico la semilla; False si ya habia usuarios.
+    """
     with app.app_context():
         conn = db.get_conn()
         try:

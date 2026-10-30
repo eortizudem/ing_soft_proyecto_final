@@ -1,4 +1,4 @@
-// Bootstrap: load the session, register every module's routes, start the router.
+/** @module main — arranque de la SPA: carga la sesión, registra las rutas de cada módulo e inicia el router. */
 import * as session from '/js/core/session.js';
 import * as router from '/js/core/router.js';
 import * as layout from '/js/core/layout.js';
@@ -10,9 +10,14 @@ import * as info from '/m/info/controller.js';
 
 // Feature modules are discovered at runtime: a missing or broken module is skipped (and logged),
 // it never breaks the shell. auth and info are mandatory and imported statically above.
+/** @type {string[]} Carpetas de módulos opcionales bajo /m/ (cada una con su controller.js). */
 const MODULES = ['inicio', 'usuarios', 'perfiles', 'catalogo', 'compras', 'prestamos', 'espera', 'adeudos',
   'asistente', 'reportes', 'notificaciones'];
 
+/**
+ * Importa dinámicamente el controlador de cada módulo opcional; los que fallen se omiten con aviso.
+ * @returns {Promise<Array<Object>>} Módulos cargados que exportan `routes`.
+ */
 async function loadModules() {
   const loaded = await Promise.all(MODULES.map(async (name) => {
     try {
@@ -26,11 +31,13 @@ async function loadModules() {
   return loaded.filter(Boolean);
 }
 
+/** Reinicia el layout y muestra la pantalla de inicio de sesión. */
 function showLogin() {
   layout.reset();
   auth.show(afterLogin);
 }
 
+/** Tras iniciar sesión navega a la ruta inicial según el rol (visitante: buscar; resto: inicio). */
 function afterLogin() {
   layout.reset();
   const target = session.isVisitor() ? 'buscar' : 'inicio';
@@ -38,12 +45,20 @@ function afterLogin() {
   else location.hash = '#/' + target;
 }
 
+/**
+ * Cierra la sesión en el servidor, limpia el hash y vuelve al login.
+ * @returns {Promise<void>}
+ */
 async function logout() {
   await auth.logout();
   history.replaceState(null, '', location.pathname);
   showLogin();
 }
 
+/**
+ * Aplica el tema, carga módulos, configura layout y router, y despacha la ruta o muestra el login.
+ * @returns {Promise<void>}
+ */
 async function boot() {
   applyTheme();
   const modules = await loadModules();

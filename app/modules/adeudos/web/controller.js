@@ -1,3 +1,6 @@
+/**
+ * @module modules/adeudos/controller — rutas y manejadores de adeudos, pago, cancelación, pérdida y daño (capa controller; une model y view).
+ */
 import { $, setFlash } from '/js/core/ui.js';
 import { confirmAction, onAction, bindForm, printHtml, money } from '/js/components/index.js';
 import { get as sessionUser } from '/js/core/session.js';
@@ -6,9 +9,23 @@ import { go } from '/js/core/router.js';
 import * as model from './model.js';
 import * as view from './view.js';
 
+/**
+ * Estado de filtros del listado (se conserva entre renderizados).
+ * @type {{q: string, estado: string, tipo: string}}
+ */
 const filters = { q: '', estado: '', tipo: '' };
+/**
+ * Indica si el usuario en sesión es administrador.
+ * @returns {boolean}
+ */
 const isAdmin = () => sessionUser()?.rol === 'admin';
 
+/**
+ * Ruta `adeudos`: listado con filtros; muestra la acción de cancelar solo al admin.
+ * @param {Object} params - Parámetros de ruta (sin uso).
+ * @param {Object} ctx - Contexto del router.
+ * @returns {Promise<void>}
+ */
 async function list(params, ctx) {
   await listPage(ctx, {
     markup: view.listPage(filters),
@@ -19,6 +36,12 @@ async function list(params, ctx) {
   });
 }
 
+/**
+ * Ruta `adeudos/:id`: detalle del adeudo y comprobante imprimible si está pagado.
+ * @param {{id: string}} params - Parámetros de ruta.
+ * @param {Object} ctx - Contexto del router.
+ * @returns {Promise<void>}
+ */
 async function detail(params, ctx) {
   const adeudo = await model.get(params.id);
   const main = ctx.render(view.detail(adeudo, isAdmin()));
@@ -28,6 +51,12 @@ async function detail(params, ctx) {
   });
 }
 
+/**
+ * Ruta `adeudos/:id/cancelar` (solo admin): formulario de motivo con confirmación.
+ * @param {{id: string}} params - Parámetros de ruta.
+ * @param {Object} ctx - Contexto del router.
+ * @returns {Promise<void>}
+ */
 async function cancelFine(params, ctx) {
   const adeudo = await model.get(params.id);
   const main = ctx.render(view.cancelFineForm(adeudo));
@@ -44,6 +73,12 @@ async function cancelFine(params, ctx) {
   });
 }
 
+/**
+ * Ruta `adeudos/:id/pago`: formulario de pago con referencia de Tesorería.
+ * @param {{id: string}} params - Parámetros de ruta.
+ * @param {Object} ctx - Contexto del router.
+ * @returns {Promise<void>}
+ */
 async function pay(params, ctx) {
   const adeudo = await model.get(params.id);
   editPage(ctx, {
@@ -56,6 +91,13 @@ async function pay(params, ctx) {
 }
 
 // Loss / damage: show the computed amount, refresh it as the exchange rate or percentage change, confirm, submit.
+/**
+ * Rutas de pérdida y daño: muestra el monto calculado, lo recalcula al cambiar el tipo de cambio o el porcentaje, confirma y registra.
+ * @param {'perdida'|'danio'} kind - Tipo de incidente.
+ * @param {{id: string}} params - Parámetros de ruta (id del préstamo).
+ * @param {Object} ctx - Contexto del router.
+ * @returns {Promise<void>}
+ */
 async function incident(kind, params, ctx) {
   let preview = await model.preview(params.id);
   const main = ctx.render(view.incidentForm(preview, kind));
@@ -88,6 +130,16 @@ async function incident(kind, params, ctx) {
   });
 }
 
+/**
+ * Rutas del módulo (hash `#/<path>`), todas con permiso `adeudos`.
+ * - `adeudos`: listado.
+ * - `adeudos/perdida/:id`: reportar pérdida del préstamo.
+ * - `adeudos/danio/:id`: reportar daño del préstamo.
+ * - `adeudos/:id`: detalle.
+ * - `adeudos/:id/cancelar`: cancelar (solo rol `admin`).
+ * - `adeudos/:id/pago`: registrar pago.
+ * @type {Array<{path: string, perm: string, roles?: Array<string>, section: string, action: function}>}
+ */
 export const routes = [
   { path: 'adeudos', perm: 'adeudos', section: 'adeudos', action: list },
   { path: 'adeudos/perdida/:id', perm: 'adeudos', section: 'adeudos', action: (p, c) => incident('perdida', p, c) },

@@ -19,7 +19,7 @@ Las clases CSS son las canónicas de `css/components.css`; no hay estilos en lí
 | `actions.js` | `btn`, `backLink`, `actions`, `onAction`, `printHtml` |
 | `toolbar.js` | `toolbar`, `bindToolbar` |
 | `table.js` | `dataTable` |
-| `form.js` | `formField`, `formView`, `formActions`, `submitButton`, `bindForm`, `serializeForm`, `options` |
+| `form.js` | `formField`, `formView`, `formActions`, `submitButton`, `bindForm`, `serializeForm`, `bindFileToText`, `options` |
 | `detail.js` | `detailGrid`, `detailView`, `receiptBlock` |
 | `card.js` | `card`, `grid`, `linkCard`, `statCard`, `itemCard`, `cardList`, `resultsPanel`, `resultsList`, `note`, `disclosure` |
 | `badge.js` | `badge`, `statusBadge` |

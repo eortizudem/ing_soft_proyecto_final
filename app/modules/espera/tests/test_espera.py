@@ -1,8 +1,13 @@
+"""Pruebas de integración de la lista de espera (D-19, RF-22).
+
+Cubre permisos, FIFO y renumeración, rechazos, expiración de plazos en días hábiles,
+cancelación, autoservicio del usuario y bitácora.
+"""
 from app.testing import make_book, make_loan, make_user, sql
 
 
 def _agotado(ejemplares=1, **over):
-    """Libro prestable cuyos ejemplares estan todos prestados (a un tercero)."""
+    """Libro prestable cuyos ejemplares están todos prestados (a un tercero)."""
     libro = make_book(ejemplares=ejemplares, **over)
     dueno = make_user()
     for _ in range(ejemplares):
@@ -11,14 +16,17 @@ def _agotado(ejemplares=1, **over):
 
 
 def _alta(cli, usuario, libro):
+    """POST /api/espera como personal para el usuario y libro dados; devuelve la respuesta cruda."""
     return cli.post("/api/espera", json={"matricula": usuario["matricula"], "id_libro": libro["id_libro"]})
 
 
 def _codigos(r):
+    """Conjunto de códigos de `motivos` de una respuesta 422."""
     return {m["codigo"] for m in r.get_json()["motivos"]}
 
 
 def test_permisos(alumno, anon, bibliotecario):
+    """Sin sesión 401; alumno 403 en rutas de personal; bibliotecario accede."""
     assert alumno.get("/api/espera").status_code == 403
     assert alumno.post("/api/espera", json={}).status_code == 403
     assert anon.get("/api/espera").status_code == 401
@@ -27,12 +35,14 @@ def test_permisos(alumno, anon, bibliotecario):
 
 
 def test_demo_maria_en_espera_lib005(bibliotecario):
+    """Los datos demo incluyen a María en espera del libro LIB005."""
     r = bibliotecario.get("/api/espera?q=LIB005").get_json()
     e = [x for x in r if x["usuario"]["matricula"] == "A0512345"][0]
     assert e["estado"] == "en_espera" and e["posicion"] == 1 and e["libro"]["disponibles"] == 0
 
 
 def test_fifo_posiciones_y_renumeracion(bibliotecario):
+    """Las posiciones son FIFO consecutivas y se renumeran al salir alguien."""
     libro = _agotado()
     us = [make_user() for _ in range(3)]
     ids = []
@@ -52,6 +62,7 @@ def test_fifo_posiciones_y_renumeracion(bibliotecario):
 
 
 def test_rechazos(bibliotecario):
+    """Altas rechazadas (duplicado, hay disponibles, no prestable, inactivo, ya tiene préstamo) y errores 400/404."""
     libro = _agotado()
     u = make_user()
     assert _alta(bibliotecario, u, libro).status_code == 201
@@ -77,6 +88,7 @@ def test_rechazos(bibliotecario):
 
 
 def test_expiracion_pasa_al_siguiente(bibliotecario):
+    """Al vencer el plazo de recoger, la entrada se cancela y avanza el siguiente."""
     libro = _agotado()
     u1, u2 = make_user(), make_user()
     e1 = _alta(bibliotecario, u1, libro).get_json()
@@ -100,6 +112,7 @@ def test_expiracion_pasa_al_siguiente(bibliotecario):
 
 
 def test_plazo_en_dias_habiles(bibliotecario):
+    """El plazo para recoger se calcula en días hábiles."""
     from datetime import date
 
     from app.core import calendario
@@ -117,6 +130,7 @@ def test_plazo_en_dias_habiles(bibliotecario):
 
 
 def test_cancelar_notificado_avanza_la_fila(bibliotecario):
+    """Cancelar una entrada notificada notifica al siguiente de la fila."""
     libro = _agotado()
     u1, u2 = make_user(), make_user()
     e1 = _alta(bibliotecario, u1, libro).get_json()
@@ -129,6 +143,7 @@ def test_cancelar_notificado_avanza_la_fila(bibliotecario):
 
 
 def test_usuario_une_cancela_y_ve_sus_solicitudes(alumno, alumno2, bibliotecario):
+    """El usuario se une, ve sus solicitudes y cancela las suyas (no las ajenas)."""
     libro = _agotado()
     r = alumno.post("/api/espera/unirse", json={"id_libro": libro["id_libro"]})
     assert r.status_code == 201 and r.get_json()["usuario"]["matricula"] == "A0512345"
@@ -144,11 +159,13 @@ def test_usuario_une_cancela_y_ve_sus_solicitudes(alumno, alumno2, bibliotecario
 
 
 def test_visitante_no_puede_unirse(anon):
+    """Un visitante (sin cuenta de usuario) no puede unirse: 403."""
     anon.post("/api/visitante")
     assert anon.post("/api/espera/unirse", json={"id_libro": 1}).status_code == 403
 
 
 def test_bitacora(bibliotecario):
+    """Alta y cancelación quedan en bitácora (`espera_alta`, `espera_cancelar`)."""
     libro = _agotado()
     u = make_user()
     e = _alta(bibliotecario, u, libro).get_json()

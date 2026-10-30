@@ -1,12 +1,27 @@
+/** @module components/toolbar — barra de búsqueda y filtros, con enlace de eventos. */
 import { html, attrs, $, $$, debounce as debounced } from '/js/core/ui.js';
 import { options } from './form.js';
 
 /**
- * toolbar({ id, search, filters, submit })
- *  search:  { name, label, placeholder, value }
- *  filters: [{ name, label, options:[[value,label]], value, grow }]
- *  submit:  label -> renders a <form> with a submit button; otherwise a plain role=search container.
- * Field ids equal their names.
+ * Barra de búsqueda y filtros. Los ids de los campos son iguales a sus nombres.
+ * @param {Object} opts - Opciones.
+ * @param {string} [opts.id] - Id del contenedor.
+ * @param {Object} [opts.search] - Campo de búsqueda.
+ * @param {string} opts.search.name - Nombre e id del campo.
+ * @param {string} opts.search.label - Etiqueta.
+ * @param {string} [opts.search.placeholder] - Placeholder.
+ * @param {string} [opts.search.value] - Valor inicial.
+ * @param {Array<Object>} [opts.filters] - Filtros tipo select.
+ * @param {string} opts.filters[].name - Nombre e id.
+ * @param {string} opts.filters[].label - Etiqueta.
+ * @param {Array<Array<string>>} opts.filters[].options - Pares `[valor, etiqueta]`.
+ * @param {string} [opts.filters[].value] - Valor seleccionado.
+ * @param {boolean} [opts.filters[].grow] - El campo crece para ocupar espacio libre.
+ * @param {string} [opts.submit] - Si se da, etiqueta del botón y renderiza un <form>; si no, un contenedor role=search.
+ * @returns {Safe} HTML de la barra.
+ * @example
+ * toolbar({ search: { name: 'q', label: 'Buscar', value: f.q },
+ *   filters: [{ name: 'estado', label: 'Estado', value: f.estado, options: [['', 'Todos'], ...labelItems('prestamo')] }] })
  */
 export function toolbar({ id, search, filters = [], submit = '' }) {
   const fields = html`
@@ -20,9 +35,17 @@ export function toolbar({ id, search, filters = [], submit = '' }) {
 }
 
 /**
- * bindToolbar(root, onChange, { debounce, state, onSubmit })
- * Calls onChange(values) when a filter changes or (debounced) while typing. `state` (optional) is
- * updated in place so filters survive navigation. Submitting calls onSubmit (default onChange).
+ * Enlaza la toolbar: llama a onChange(valores) al cambiar un filtro o (con debounce) al teclear.
+ * `state` (opcional) se actualiza en sitio para que los filtros sobrevivan a la navegación. Al enviar el
+ * formulario se llama a onSubmit (por defecto onChange).
+ * @param {HTMLElement} root - Elemento `[data-toolbar]`.
+ * @param {function(Object): any} onChange - Recibe una copia de los valores `{nombre: valor}`.
+ * @param {Object} [opts] - Opciones.
+ * @param {number} [opts.debounce=250] - Retardo (ms) al teclear en búsquedas.
+ * @param {Object} [opts.state] - Objeto compartido que se mantiene sincronizado con los valores.
+ * @param {function(Object): any} [opts.onSubmit] - Manejador del envío del formulario.
+ * @returns {function(): Object} Función que lee y devuelve el estado actual.
+ * @example bindToolbar($('[data-toolbar]', main), (values) => recargar(values), { state: filtros });
  */
 export function bindToolbar(root, onChange, { debounce = 250, state = {}, onSubmit } = {}) {
   const controls = $$('input[name], select[name]', root);

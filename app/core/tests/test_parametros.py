@@ -1,9 +1,11 @@
+"""Pruebas de los parametros de negocio de `core.parametros` (valores por defecto y sobrescritura)."""
 from decimal import Decimal
 
 from app.core import parametros
 
 
 def test_defaults_con_contexto(app):
+    """Con contexto de app se leen los valores por defecto de `Config`."""
     with app.app_context():
         assert parametros.tipo_cambio() == Decimal("18.00")
         assert parametros.presupuesto_mensual() == Decimal("5000")
@@ -11,6 +13,7 @@ def test_defaults_con_contexto(app):
 
 
 def test_sobrescritura_por_config(app):
+    """`app.config` sobrescribe los parametros y se convierten al tipo correcto."""
     app.config.update(TIPO_CAMBIO_USD_MXN="17.5", PRESUPUESTO_MENSUAL_USD=1200, ESPERA_DIAS_RESERVA="3")
     try:
         with app.app_context():
@@ -25,4 +28,5 @@ def test_sobrescritura_por_config(app):
 
 
 def test_sin_contexto_usa_config():
+    """Sin contexto de app se leen los valores de `Config`."""
     assert isinstance(parametros.tipo_cambio(), Decimal)

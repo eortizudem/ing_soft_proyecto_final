@@ -1,8 +1,19 @@
+/** @module modules/inicio/view — HTML puro del tablero de inicio (tarjetas de personal, estado propio y accesos) */
 import { html } from '/js/core/ui.js';
 import { page, grid, linkCard, statCard, meter, notice, money, usd, date } from '/js/components/index.js';
 
+/**
+ * Indica si las estadísticas son de personal (incluyen conteos globales).
+ * @param {Object|null} s - Respuesta de /api/stats.
+ * @returns {boolean}
+ */
 const isStaff = (s) => !!s && s.usuarios_activos !== undefined;
 
+/**
+ * Tarjetas de conteos globales del personal.
+ * @param {{usuarios_activos: number, titulos_activos: number, compras_pendientes: number, prestamos_activos: number, prestamos_vencidos: number, adeudos_pendientes: number|string, espera_activa: number, consultas_pendientes: number}} s - Estadísticas globales.
+ * @returns {*} Cuadrícula de tarjetas.
+ */
 const staffCards = (s) => grid([
   statCard({ title: 'Usuarios activos', value: s.usuarios_activos, note: 'Cuentas disponibles para consulta' }),
   statCard({ title: 'Títulos en catálogo', value: s.titulos_activos, note: 'Colección académica y literatura' }),
@@ -14,13 +25,22 @@ const staffCards = (s) => grid([
   statCard({ title: 'Consultas pendientes', value: s.consultas_pendientes, note: 'Preguntas del asistente que esperan a un bibliotecario' }),
 ], { cols: 'stats' });
 
+/**
+ * Medidor del presupuesto de compras del mes (D-22).
+ * @param {{presupuesto_usado_usd: number|string, presupuesto_mensual_usd: number|string}} s - Estadísticas con presupuesto.
+ * @returns {*}
+ */
 const budget = (s) => meter({
   value: Number(s.presupuesto_usado_usd), max: Number(s.presupuesto_mensual_usd) || 1,
   label: 'Presupuesto de compras del mes (USD)',
   text: `${usd(s.presupuesto_usado_usd)} de ${usd(s.presupuesto_mensual_usd)}`,
 });
 
-// Estado propio (alumno/docente): préstamos, vencimientos y adeudos.
+/**
+ * Tarjetas del estado propio (préstamos, vencimientos, adeudos, espera) y aviso si hay vencidos o multas.
+ * @param {{prestamos_activos: number, prestamos_vencidos: number, proximo_vencimiento: string|null, adeudos_pendientes: number|string, espera_activa: number}} m - Campo `mio` de /api/stats.
+ * @returns {*}
+ */
 const ownCards = (m) => html`${m.prestamos_vencidos > 0 || m.adeudos_pendientes > 0
   ? notice({ tone: 'error', text: 'Tienes préstamos vencidos o multas pendientes: no podrás pedir nuevos préstamos hasta regularizarlos.' }) : ''}
   ${grid([
@@ -31,6 +51,13 @@ const ownCards = (m) => html`${m.prestamos_vencidos > 0 || m.adeudos_pendientes 
     statCard({ title: 'En lista de espera', value: m.espera_activa, note: 'Libros que esperas' }),
   ], { cols: 'stats' })}`;
 
+/**
+ * Tablero de inicio: tarjetas de personal o de estado propio, presupuesto (con permiso `compras`) y accesos rápidos según permisos.
+ * @param {{nombre_completo: string, rol: string}} user - Usuario de la sesión.
+ * @param {Object|null} stats - Respuesta de /api/stats (`mio` y, si es personal, conteos globales).
+ * @param {(permiso: string) => boolean} can - Verifica permisos de la sesión.
+ * @returns {*} Página (componente `page`).
+ */
 export const dashboard = (user, stats, can) => {
   const staff = isStaff(stats);
   const own = !staff && stats?.mio && user.rol !== 'visitante';

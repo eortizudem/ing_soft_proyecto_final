@@ -1,8 +1,20 @@
 #!/usr/bin/env python3
 """Recrea por completo la base de datos de LibriGest y la siembra.
 
-Uso: python scripts/recrear_db.py [--yes] [--sin-semilla]
-Aplica todos los db/*.sql en orden alfabetico y despues la semilla de usuarios (python -m app.seed).
+Uso:
+  python scripts/recrear_db.py              # pide confirmacion [s/N], recrea y siembra
+  python scripts/recrear_db.py -y           # igual, sin confirmacion (--yes)
+  python scripts/recrear_db.py --sin-semilla  # solo esquema: omite db/*seed*.sql y la semilla de usuarios
+
+Pasos: levanta el contenedor db y espera pg_isready; DROP SCHEMA public CASCADE + CREATE SCHEMA + extension
+unaccent; aplica todos los db/*.sql en orden alfabetico; (salvo --sin-semilla) arranca web y ejecuta la semilla
+de usuarios y compras (python -m app.seed); imprime las filas por tabla.
+
+Codigos de salida: 0 correcto; 1 cancelado por el usuario o error de docker/PostgreSQL/SQL (o el codigo del
+paso que fallo).
+
+SEGURIDAD: DESTRUCTIVO. Borra TODOS los datos de la base configurada (POSTGRES_DB). Sin -y exige responder
+s/si/y; usar -y solo en automatizaciones. Para conservar datos, haga antes `python scripts/respaldo.py`.
 """
 import argparse
 import shutil
@@ -12,23 +24,53 @@ import time
 from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parent.parent
+# Tablas cuyo conteo se imprime al final (las 21 de db/01_schema.sql).
 TABLAS = ["permiso", "rol", "rol_permiso", "usuario", "bitacora", "recuperacion_contrasena", "reporte_generado",
           "solicitud_compra", "detalle_solicitud", "ubicacion", "libro", "ejemplar", "politica_prestamo",
           "prestamo", "adeudo", "renovacion", "lista_espera", "intencion", "conversacion", "mensaje",
           "pregunta_frecuente"]
+# Comando psql ejecutado dentro del contenedor (las variables POSTGRES_* las define el servicio db).
 PSQL = 'psql -v ON_ERROR_STOP=1 -q -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
 
 
 def salir(msg, codigo=1):
+    """Imprime `ERROR: msg` en stderr y termina el proceso.
+
+    Args:
+        msg: mensaje de error.
+        codigo: codigo de salida (1 por defecto).
+
+    Raises:
+        SystemExit: siempre.
+    """
     print(f"ERROR: {msg}", file=sys.stderr)
     sys.exit(codigo)
 
 
 def dc(args, **kw):
+    """Ejecuta `docker compose <args>` en la raiz del proyecto.
+
+    Args:
+        args: lista de argumentos de compose.
+        **kw: opciones de `subprocess.run`.
+
+    Returns:
+        subprocess.CompletedProcess.
+    """
     return subprocess.run(["docker", "compose"] + args, cwd=RAIZ, **kw)
 
 
 def psql(stdin_bytes=None, stdin_file=None, extra=""):
+    """Ejecuta psql (ON_ERROR_STOP, silencioso) dentro del contenedor db leyendo el SQL por stdin.
+
+    Args:
+        stdin_bytes: SQL en bytes (se usa si no hay `stdin_file`).
+        stdin_file: ruta de un archivo .sql que se envia por stdin.
+        extra: opciones adicionales de psql (p. ej. "-t -A -F '|'").
+
+    Returns:
+        subprocess.CompletedProcess con stdout/stderr capturados (en bytes).
+    """
     cmd = ["exec", "-T", "db", "sh", "-c", f"{PSQL} {extra}"]
     if stdin_file:
         with open(stdin_file, "rb") as f:
@@ -37,6 +79,15 @@ def psql(stdin_bytes=None, stdin_file=None, extra=""):
 
 
 def chequear(res, paso):
+    """Verifica el resultado de un paso e imprime `OK`.
+
+    Args:
+        res: CompletedProcess devuelto por `psql`/`dc`.
+        paso: descripcion del paso, para los mensajes.
+
+    Raises:
+        SystemExit: con el codigo del proceso si fallo (tras volcar su stderr).
+    """
     if res.returncode:
         sys.stderr.write(res.stderr.decode("utf-8", "replace"))
         salir(f"Falló el paso: {paso}", res.returncode)
@@ -44,6 +95,11 @@ def chequear(res, paso):
 
 
 def main():
+    """Punto de entrada: confirma, recrea el esquema, aplica db/*.sql, siembra y cuenta filas.
+
+    Returns:
+        None. Termina con `sys.exit` ante cancelacion o error (ver codigos en el docstring del modulo).
+    """
     ap = argparse.ArgumentParser(description="Recrea y siembra la base de datos.")
     ap.add_argument("-y", "--yes", action="store_true", help="no pedir confirmación")
     ap.add_argument("--sin-semilla", action="store_true", help="solo esquema, sin datos")

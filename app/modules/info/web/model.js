@@ -1,9 +1,14 @@
+/** @module modules/info/model — datos de la Guía: FAQ, cuentas demo, temas de apariencia y módulos del sistema. */
 import { api } from '/js/core/api.js';
 import { DEMO_ACCOUNTS } from '/m/auth/model.js';
 import * as theme from '/js/core/theme.js';
 
 export { DEMO_ACCOUNTS };
 
+/**
+ * Preguntas frecuentes (GET /api/faq). Ante un error devuelve lista vacía para no romper la Guía.
+ * @returns {Promise<Array<{pregunta: string, respuesta: string, categoria: string}>>}
+ */
 export async function faq() {
   try {
     return await api.get('/faq');
@@ -12,7 +17,10 @@ export async function faq() {
   }
 }
 
-// Theme buttons: label + patch applied to the localStorage theme.
+/**
+ * Botones de apariencia: `[etiqueta, parche]` que se aplica al tema guardado en localStorage.
+ * @type {Array<[string, object]>}
+ */
 export const THEMES = [
   ['Azul', { primary: '#1e68b8' }],
   ['Verde', { primary: '#2e7d32' }],
@@ -24,10 +32,22 @@ export const THEMES = [
   ['Libro abierto', { logo: 'open' }],
   ['Libros apilados', { logo: 'stacked' }],
 ];
+/**
+ * Aplica un cambio parcial al tema (se guarda solo en este navegador).
+ * @param {{primary?: string, background?: string, font?: string, logo?: string}} patch - propiedades a cambiar.
+ * @returns {void}
+ */
 export const applyTheme = (patch) => theme.set(patch);
+/**
+ * Restablece la apariencia por defecto.
+ * @returns {void}
+ */
 export const resetTheme = () => theme.reset();
 
-// Módulos del sistema: alimentan la Guía (accesos rápidos) y el Diagrama de funciones. `perm` oculta lo que el rol no usa.
+/**
+ * Módulos del sistema: alimentan la Guía (accesos rápidos) y el Diagrama de funciones. `perm` oculta lo que el rol no usa.
+ * @type {Array<{title: string, href: string, perm: string, button: string, text: string, items: string[]}>}
+ */
 export const MODULES = [
   { title: 'Acceso y personas', href: 'usuarios', perm: 'usuarios', button: 'Usuarios', text: 'Alta, edición, baja, historial y actualización de la lista desde Servicios Escolares.',
     items: ['Autenticación / visitante', 'Recuperar contraseña', 'Alta, edición y baja (se conserva el historial)', 'Historial del usuario', 'Actualizar desde Servicios Escolares e importar lista de alumnos (CSV)', 'Perfiles, permisos y políticas'] },

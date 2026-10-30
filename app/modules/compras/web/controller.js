@@ -1,3 +1,4 @@
+/** @module modules/compras/controller — rutas de solicitudes de compra (lista, nueva, revisión, comprobante, recepción) */
 import * as session from '/js/core/session.js';
 import { go } from '/js/core/router.js';
 import { $, $$, setFlash } from '/js/core/ui.js';
@@ -5,19 +6,37 @@ import { bindForm, onAction, printHtml, confirmAction } from '/js/components/ind
 import * as model from './model.js';
 import * as view from './view.js';
 
+/** Borrador en edición/revisión. */
 let draft = null; // request being edited/reviewed, kept between form and review pages
 
+/**
+ * Ruta `#/compras` (permiso `compras`): lista de solicitudes con barra de presupuesto.
+ * @param {Object} params - Parámetros de ruta (sin uso).
+ * @param {Object} ctx - Contexto del router.
+ * @returns {Promise<void>}
+ */
 async function list(params, ctx) {
   ctx.render(view.listPage(await model.list(), await model.budget()));
 }
 
 // Reads the lines currently in the form.
+/**
+ * Lee las líneas capturadas en el formulario.
+ * @param {HTMLFormElement} form - Formulario de solicitud.
+ * @returns {Array<{descripcion: string, cantidad: number, precio_unitario: number}>} Líneas.
+ */
 const readLines = (form) => $$('.purchase-line', form).map((row) => ({
   descripcion: $('[name="descripcion"]', row).value,
   cantidad: Number($('[name="cantidad"]', row).value),
   precio_unitario: Number($('[name="precio_unitario"]', row).value),
 }));
 
+/**
+ * Ruta `#/compras/nueva` (permiso `compras`): formulario con atajos 'Guardar solicitud' y 'Guardar y enviar' (D-17) o paso por revisión.
+ * @param {Object} params - Parámetros de ruta (sin uso).
+ * @param {Object} ctx - Contexto del router.
+ * @returns {Promise<void>}
+ */
 async function newRequest(params, ctx) {
   const titles = await model.bookTitles();
   draft = draft && !draft.id ? draft : { justificacion: '', detalles: [model.emptyLine(), model.emptyLine()] };
@@ -25,6 +44,10 @@ async function newRequest(params, ctx) {
   if (!main) return;
   const form = $('#purchase-form', main);
   const lines = $('#lines', main);
+  /**
+   * Actualiza total, botones de quitar e ids únicos de las líneas.
+   * @returns {void}
+   */
   const refresh = () => {
     $('#total', main).textContent = view.totalText(readLines(form));
     $$('[data-action="remove-line"]', main).forEach((b) => { b.disabled = lines.children.length === 1; });
@@ -43,6 +66,11 @@ async function newRequest(params, ctx) {
   // Atajos de 3 clics (D-17): "Guardar solicitud" la deja pendiente; "Guardar y enviar" la envía a Tesorería.
   // Sin atajo, el envío pasa por la pantalla de revisión (4 clics).
   let mode = 'review';
+  /**
+   * Crea el manejador de un atajo de guardado.
+   * @param {'save'|'send'} m - Modo de envío del formulario.
+   * @returns {function(): void} Manejador que fija el modo y envía el formulario.
+   */
   const shortcut = (m) => () => { mode = m; form.requestSubmit(); };
   onAction(form, { save: shortcut('save'), 'save-send': shortcut('send') });
   bindForm(form, { onSubmit: async (data) => {
@@ -57,6 +85,12 @@ async function newRequest(params, ctx) {
   } });
 }
 
+/**
+ * Ruta `#/compras/revisar` (permiso `compras`): confirmación antes de enviar a Tesorería; sin borrador redirige a la nueva solicitud.
+ * @param {Object} params - Parámetros de ruta (sin uso).
+ * @param {Object} ctx - Contexto del router.
+ * @returns {Promise<void>}
+ */
 async function review(params, ctx) {
   if (!draft) return go('compras/nueva');
   const main = ctx.render(view.review(draft));
@@ -72,6 +106,12 @@ async function review(params, ctx) {
   });
 }
 
+/**
+ * Ruta `#/compras/:id` (permiso `compras`): comprobante con acciones enviar, recibir, cancelar e imprimir.
+ * @param {{id: string}} params - Parámetros de ruta.
+ * @param {Object} ctx - Contexto del router.
+ * @returns {Promise<void>}
+ */
 async function show(params, ctx) {
   const request = await model.get(params.id);
   const main = ctx.render(view.receipt(request, {
@@ -95,6 +135,12 @@ async function show(params, ctx) {
   });
 }
 
+/**
+ * Ruta `#/compras/:id/recibir` (permiso `compras`): formulario de recepción parcial/total con factura; redirige si no es recibible.
+ * @param {{id: string}} params - Parámetros de ruta.
+ * @param {Object} ctx - Contexto del router.
+ * @returns {Promise<void>}
+ */
 async function receive(params, ctx) {
   const request = await model.get(params.id);
   if (!model.canReceive(request)) { setFlash('Solo se puede recibir el pedido de solicitudes enviadas con títulos pendientes.'); return go('compras/' + params.id); }
@@ -108,6 +154,10 @@ async function receive(params, ctx) {
   } });
 }
 
+/**
+ * Rutas del módulo: compras, compras/nueva, compras/revisar, compras/:id/recibir, compras/:id (todas con permiso `compras`).
+ * @type {Array<Object>}
+ */
 export const routes = [
   { path: 'compras', perm: 'compras', section: 'compras', action: list },
   { path: 'compras/nueva', perm: 'compras', section: 'compras', action: newRequest },

@@ -1,8 +1,18 @@
-// Accessible confirm dialog with focus trap. Resolves true on confirm, false on cancel/Escape.
+/** @module components/modal — diálogo de confirmación accesible con trampa de foco. Resuelve true al confirmar y false al cancelar o pulsar Escape. */
 import { html, $, $$ } from '/js/core/ui.js';
 import { btn } from './actions.js';
 
-/** await confirmAction({ title, message, confirmLabel, variant }) -> boolean */
+/**
+ * Muestra un diálogo modal de confirmación en #dialog-root y devuelve la decisión. Atrapa el foco,
+ * se cierra con Escape y restaura el foco previo.
+ * @param {Object} opts - Opciones.
+ * @param {string} opts.title - Título del diálogo.
+ * @param {string} opts.message - Mensaje.
+ * @param {string} [opts.confirmLabel='Confirmar'] - Texto del botón de confirmar.
+ * @param {string} [opts.variant='danger'] - Variante del botón de confirmar.
+ * @returns {Promise<boolean>} true si se confirma; false si se cancela o se pulsa Escape.
+ * @example if (!(await confirmAction({ title: 'Dar de baja', message: '¿Seguro?' }))) return;
+ */
 export function confirmAction({ title, message, confirmLabel = 'Confirmar', variant = 'danger' }) {
   const root = $('#dialog-root');
   const previous = document.activeElement;

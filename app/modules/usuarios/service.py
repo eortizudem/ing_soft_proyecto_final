@@ -1,3 +1,10 @@
+"""Servicio de `usuarios` (capa service MVC): reglas de negocio de cuentas.
+
+Cubre alta/edición/baja con sus guardas (RF-01, RF-03), historial por usuario (RF-04), actualización
+simulada desde Servicios Escolares e importación de lista de alumnos por CSV (D-23). Persiste vía `model`
+y reutiliza `app.core.circulacion` para las condiciones de baja (D-24). Los errores se reportan con `ApiError`.
+"""
+
 import csv
 import io
 import json
@@ -36,20 +43,65 @@ SCHEMA_EDITAR = {**SCHEMA, "password": Str("contraseña", required=False, **_PWD
 
 
 def listar(q, rol, estado, limite=None):
+    """Lista cuentas con filtros opcionales (RF-01).
+
+    Args:
+        q: Texto de búsqueda (matrícula, nombre, correo).
+        rol: Filtro por rol.
+        estado: Filtro por estado.
+        limite: Máximo de filas.
+
+    Returns:
+        Lista de cuentas.
+    """
     return model.list_(q, rol, estado, limite)
 
 
 def obtener(id_usuario):
+    """Obtiene una cuenta o falla si no existe.
+
+    Args:
+        id_usuario: Identificador de la cuenta.
+
+    Returns:
+        Dict de la cuenta.
+
+    Raises:
+        ApiError: 404 si no existe.
+    """
     return or_404(model.get(id_usuario), NO_ENCONTRADA)
 
 
 def _clean(d, schema):
+    """Valida el payload con `schema` y reemplaza la contraseña en claro por su hash.
+
+    Args:
+        d: Payload crudo.
+        schema: `SCHEMA_CREAR` o `SCHEMA_EDITAR`.
+
+    Returns:
+        Dict validado; `password` es hash o None.
+
+    Raises:
+        ApiError: 400 con motivos por campo si la validación falla.
+    """
     data = validate(d, schema)
     data["password"] = generate_password_hash(data["password"]) if data.get("password") else None
     return data
 
 
 def _guard_baja(target, actor):
+    """Verifica que una cuenta pueda darse de baja (RF-03, D-24).
+
+    Rechaza: baja de la propia cuenta, préstamos abiertos o adeudos pendientes, y baja del último admin activo.
+
+    Args:
+        target: Cuenta a dar de baja.
+        actor: Usuario que ejecuta la acción.
+
+    Raises:
+        ApiError: 400 si se incumple alguna condición.
+    """
     if target["id_usuario"] == actor["id_usuario"]:
         raise ApiError("No puedes dar de baja tu propia cuenta.")
     ctx = circulacion.contexto_usuario(target["id_usuario"])  # D-24: abierto = sin fecha_devolucion
@@ -61,6 +113,20 @@ def _guard_baja(target, actor):
 
 @audit("usuario_crear", lambda u: f"Alta de {u['matricula']} ({u['rol']})")
 def crear(d, actor):
+    """Crea una cuenta (RF-01, RF-03). Auditada como `usuario_crear`.
+
+    Valida datos, rechaza matrícula/correo duplicados; si nace 'inactivo' queda sin vigencia y con fecha de baja.
+
+    Args:
+        d: Payload con matricula, nombre_completo, correo, rol, estado, fuente_validacion y password.
+        actor: Usuario autenticado que registra el alta.
+
+    Returns:
+        La cuenta creada.
+
+    Raises:
+        ApiError: 400 si hay datos inválidos o la matrícula/correo ya existen.
+    """
     data = _clean(d, SCHEMA_CREAR)
     if model.find_conflict(data["matricula"], data["correo"]):
         raise ApiError("La matrícula o el correo ya están registrados.")
@@ -72,6 +138,23 @@ def crear(d, actor):
 
 @audit("usuario_editar", lambda u: f"Edición de {u['matricula']}")
 def actualizar(id_usuario, d, actor):
+    """Edita una cuenta (RF-03). Auditada como `usuario_editar`.
+
+    Reglas: sin duplicados; no cambiar la propia matrícula ni quitarse la administración; baja sujeta a
+    `_guard_baja`; debe quedar al menos un admin activo. Sin contraseña nueva se conserva la actual. Al cambiar
+    estado se actualizan `registro_vigente` y `fecha_baja`.
+
+    Args:
+        id_usuario: Cuenta a editar.
+        d: Payload (contraseña opcional).
+        actor: Usuario autenticado.
+
+    Returns:
+        La cuenta actualizada.
+
+    Raises:
+        ApiError: 404 si no existe; 400 si hay datos inválidos o se viola alguna regla.
+    """
     old = obtener(id_usuario)
     data = _clean(d, SCHEMA_EDITAR)
     if model.find_conflict(data["matricula"], data["correo"], id_usuario):
@@ -97,6 +180,18 @@ def actualizar(id_usuario, d, actor):
 @audit(lambda u: "usuario_baja" if u["estado"] == "inactivo" else "usuario_reactivar",
        lambda u: f"{'Baja' if u['estado'] == 'inactivo' else 'Reactivación'} de {u['matricula']}")
 def alternar(id_usuario, actor):
+    """Da de baja o reactiva una cuenta según su estado actual (RF-03). Auditada como `usuario_baja`/`usuario_reactivar`.
+
+    Args:
+        id_usuario: Cuenta a alternar.
+        actor: Usuario autenticado.
+
+    Returns:
+        La cuenta con su nuevo estado.
+
+    Raises:
+        ApiError: 404 si no existe; 400 si la baja incumple `_guard_baja`.
+    """
     toggle_estado(
         "usuario", "id_usuario", id_usuario, load=obtener,
         guard=lambda u, nuevo: _guard_baja(u, actor) if nuevo == "inactivo" else None,
@@ -107,6 +202,17 @@ def alternar(id_usuario, actor):
 
 # --- Historial (RF-04) ---
 def historial(id_usuario):
+    """Historial completo del usuario (RF-04).
+
+    Args:
+        id_usuario: Cuenta consultada.
+
+    Returns:
+        Dict con listas `prestamos` (con `libro`), `renovaciones`, `adeudos`, `espera` y `bitacora`.
+
+    Raises:
+        ApiError: 404 si la cuenta no existe.
+    """
     obtener(id_usuario)
     prestamos = [{**{k: p[k] for k in ("id_prestamo", "fecha_prestamo", "fecha_vencimiento", "fecha_devolucion",
                                        "estado", "num_renovaciones")},
@@ -127,6 +233,14 @@ _SCHEMA_REGISTRO = {k: SCHEMA[k] for k in ("matricula", "nombre_completo", "corr
 
 
 def _leer_origen():
+    """Lee los registros del archivo simulado de Servicios Escolares (D-23).
+
+    Returns:
+        Lista de registros crudos (vacía si el JSON no es un objeto).
+
+    Raises:
+        ApiError: 500 si el archivo no se puede leer o no es JSON válido.
+    """
     try:
         data = json.loads(ARCHIVO_SIMULADO.read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -135,13 +249,32 @@ def _leer_origen():
 
 
 def _normalizar(reg):
-    """Valida un registro del lista de alumnos (reutiliza SCHEMA). Estado vacío = activo."""
+    """Valida un registro de la lista de alumnos reutilizando SCHEMA (D-23). Estado vacío = activo.
+
+    Args:
+        reg: Registro crudo (matricula, nombre_completo, correo, rol, estado).
+
+    Returns:
+        Registro validado y normalizado.
+
+    Raises:
+        ApiError: 400 si el registro es inválido.
+    """
     reg = {k: (v.strip() if isinstance(v, str) else v) for k, v in (reg or {}).items()}
     reg["estado"] = reg.get("estado") or "activo"
     return validate(reg, _SCHEMA_REGISTRO)
 
 
 def _diferencias(old, new):
+    """Campos que difieren entre la cuenta local y el registro de origen (sin distinguir mayúsculas).
+
+    Args:
+        old: Cuenta local existente.
+        new: Registro normalizado de origen.
+
+    Returns:
+        Lista de nombres de campo; incluye `fuente_validacion` si la cuenta no proviene de Servicios Escolares.
+    """
     out = [c for c in CAMPOS if (old[c] or "").lower() != (new[c] or "").lower()]
     if old["fuente_validacion"] != FUENTE_LISTA:
         out.append("fuente_validacion")
@@ -149,7 +282,18 @@ def _diferencias(old, new):
 
 
 def _clasificar(reg):
-    """-> (accion, detalle) con accion nuevo | cambio | baja | sin_cambios | omitido (detalle = campos o motivo)."""
+    """Decide qué hacer con un registro de origen (D-23).
+
+    Solo gestiona alumnos y docentes; omite registros inválidos, de otros roles, con correo en otra cuenta o
+    dados de baja sin cuenta local.
+
+    Args:
+        reg: Registro crudo.
+
+    Returns:
+        Dict con `accion` (nuevo | cambio | baja | sin_cambios | omitido) y, según el caso, `cambios`,
+        `motivo`, `registro`, `matricula` e `id_usuario`.
+    """
     try:
         new = _normalizar(reg)
     except ApiError as e:
@@ -176,6 +320,14 @@ def _clasificar(reg):
 
 
 def _plan(registros):
+    """Clasifica todos los registros y omite las matrículas repetidas en el origen.
+
+    Args:
+        registros: Registros crudos.
+
+    Returns:
+        Lista de ítems clasificados (ver `_clasificar`).
+    """
     vistos, plan = set(), []
     for reg in registros:
         item = _clasificar(reg)
@@ -188,6 +340,14 @@ def _plan(registros):
 
 
 def _vista(item):
+    """Proyección de un ítem del plan para la vista previa.
+
+    Args:
+        item: Ítem de `_clasificar`.
+
+    Returns:
+        Dict con los campos del registro, `accion` y opcionalmente `cambios`/`motivo`.
+    """
     out = {**(item.get("registro") or {}), "accion": item["accion"]}
     for k in ("cambios", "motivo"):
         if k in item:
@@ -196,6 +356,14 @@ def _vista(item):
 
 
 def previsualizar_actualizacion():
+    """Vista previa de la actualización desde Servicios Escolares, sin escribir (D-23, RF-03).
+
+    Returns:
+        Dict con `origen`, `registros` y `resumen` (nuevos, cambios, bajas).
+
+    Raises:
+        ApiError: 500 si no se puede leer el archivo simulado.
+    """
     plan = _plan(_leer_origen())
     cuenta = lambda a: sum(1 for i in plan if i["accion"] == a)  # noqa: E731
     return {"origen": "servicios_escolares", "registros": [_vista(i) for i in plan],
@@ -203,7 +371,18 @@ def previsualizar_actualizacion():
 
 
 def _aplicar(item, actor, creds):
-    """Escribe un registro planeado (crear o actualizar) reutilizando crear/actualizar y sus guardas."""
+    """Escribe un registro planeado (crear o actualizar) reutilizando crear/actualizar y sus guardas.
+
+    Los registros nuevos reciben una contraseña inicial aleatoria que se agrega a `creds`.
+
+    Args:
+        item: Ítem del plan con acción 'nuevo', 'cambio' o 'baja'.
+        actor: Usuario autenticado.
+        creds: Lista acumuladora de credenciales iniciales (se modifica).
+
+    Raises:
+        ApiError: si crear/actualizar rechazan el registro (guardas de baja, cuenta propia, último admin).
+    """
     reg = {**item["registro"], "fuente_validacion": FUENTE_LISTA}
     if item["accion"] == "nuevo":
         password = secrets.token_urlsafe(9)
@@ -214,6 +393,18 @@ def _aplicar(item, actor, creds):
 
 
 def _ejecutar(plan, actor, detalle):
+    """Aplica un plan y registra un resumen en bitácora.
+
+    Los registros omitidos o que fallen por guardas se reportan en `omitidos` sin abortar el lote.
+
+    Args:
+        plan: Ítems clasificados.
+        actor: Usuario autenticado.
+        detalle: Tupla cuyo primer elemento es la acción de bitácora (usuario_sync | usuario_importar).
+
+    Returns:
+        Dict con creados, actualizados, bajas, omitidos y credenciales_iniciales.
+    """
     res = {"creados": 0, "actualizados": 0, "bajas": 0, "omitidos": [], "credenciales_iniciales": []}
     for item in plan:
         if item["accion"] == "omitido":
@@ -234,10 +425,36 @@ def _ejecutar(plan, actor, detalle):
 
 
 def actualizar_lista(actor):
+    """Aplica la actualización desde Servicios Escolares simulado (D-23, RF-03).
+
+    Args:
+        actor: Usuario autenticado.
+
+    Returns:
+        Resultado de `_ejecutar`.
+
+    Raises:
+        ApiError: 500 si no se puede leer el archivo simulado.
+    """
     return _ejecutar(_plan(_leer_origen()), actor, ("usuario_sync",))
 
 
 def importar_csv(texto, actor):
+    """Importa una lista de alumnos desde texto CSV (D-23, RF-03).
+
+    Columnas: matrícula, nombre, correo, perfil y estado opcional; el encabezado es opcional. Las líneas
+    inválidas se reportan en `errores` con su número de línea sin detener la importación.
+
+    Args:
+        texto: Contenido del CSV.
+        actor: Usuario autenticado.
+
+    Returns:
+        Dict con creados, actualizados, bajas, errores (ordenados por línea) y credenciales_iniciales.
+
+    Raises:
+        ApiError: 400 si el texto está vacío.
+    """
     texto = (texto or "").strip() if isinstance(texto, str) else ""
     if not texto:
         raise ApiError("Pega o carga el contenido del CSV.")

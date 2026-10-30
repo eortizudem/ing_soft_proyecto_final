@@ -5,6 +5,7 @@ from datetime import datetime
 from . import circulacion, notificaciones, repo
 from .bitacora import log
 
+# Estados de lista_espera que aun ocupan lugar en la fila.
 ACTIVOS = ("en_espera", "notificado")
 
 

@@ -1,7 +1,12 @@
+/** @module modules/info/view — vistas informativas: guía de diseño, guía de demostración, diagrama de funciones y pantallas de acceso restringido / no encontrado. */
 import { html } from '/js/core/ui.js';
 import { page, btn, actions, card, grid, linkCard, notice, dataTable, disclosure } from '/js/components/index.js';
 import { THEMES, MODULES } from './model.js';
 
+/**
+ * Guía de diseño: explica colores, tipografía y logo, con botones de acción `theme` y `reset` para probar la apariencia.
+ * @returns {object} página.
+ */
 export const design = () => page({
   title: 'Guía de diseño de LibriGest',
   desc: 'Colores, tipografía y logo compartidos. Prueba un cambio y abre otra sección para ver el resultado; la preferencia se guarda solo en este navegador.',
@@ -15,6 +20,13 @@ export const design = () => page({
   ${actions([btn({ label: 'Restablecer apariencia', action: 'reset' }), btn({ label: 'Volver al inicio', href: 'inicio' })])}`,
 });
 
+/**
+ * Guía de demostración: accesos a módulos permitidos, aviso, credenciales demo y preguntas frecuentes.
+ * @param {Array<{rol: string, matricula: string, password: string, nota: string}>} accounts - cuentas de demostración.
+ * @param {Array<{pregunta: string, respuesta: string, categoria: string}>} faq - preguntas frecuentes (se omite el bloque si está vacío).
+ * @param {function(string): boolean} [can] - indica si el usuario tiene un permiso (filtra los módulos mostrados).
+ * @returns {object} página.
+ */
 export const guide = (accounts, faq, can = () => true) => page({
   title: 'Guía de demostración',
   desc: 'Cuentas de prueba y preguntas frecuentes.',
@@ -29,8 +41,17 @@ export const guide = (accounts, faq, can = () => true) => page({
     disclosure(f.pregunta, html`<p>${f.respuesta}</p><p class="tiny muted">${f.categoria}</p>`)) }) : ''}`,
 });
 
+/**
+ * Lista con viñetas.
+ * @param {string[]} items - elementos.
+ * @returns {object} `<ul>`.
+ */
 const list = (items) => html`<ul>${items.map((i) => html`<li>${i}</li>`)}</ul>`;
 
+/**
+ * Diagrama general de funciones: una tarjeta por módulo con sus funciones y botón de acceso.
+ * @returns {object} página.
+ */
 export const functions = () => page({
   title: 'Diagrama general de funciones',
   desc: 'Módulos y flujos del proyecto LibriGest.',
@@ -38,12 +59,21 @@ export const functions = () => page({
     { cols: 3, cls: 'diagram-columns' }),
 });
 
+/**
+ * Pantalla de acceso restringido (el perfil no tiene permiso).
+ * @returns {object} página.
+ */
 export const restricted = () => page({
   title: 'Acceso restringido',
   desc: 'Tu perfil no tiene permisos para esta función.',
   body: actions([btn({ label: 'Volver al inicio', href: 'inicio' })]),
 });
 
+/**
+ * Pantalla de registro no encontrado.
+ * @param {string} [message] - descripción a mostrar; por defecto un texto genérico.
+ * @returns {object} página.
+ */
 export const notFound = (message) => page({
   title: 'Registro no encontrado',
   desc: message || 'Es posible que la referencia ya no exista.',

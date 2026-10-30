@@ -1,3 +1,4 @@
+/** @module modules/perfiles/controller — ruta hash de perfiles y permisos; orquesta modelo y vista */
 import * as session from '/js/core/session.js';
 import * as layout from '/js/core/layout.js';
 import { dispatch } from '/js/core/router.js';
@@ -5,6 +6,12 @@ import { $, $$, showError, clearError, toast } from '/js/core/ui.js';
 import * as model from './model.js';
 import * as view from './view.js';
 
+/**
+ * Ruta `#perfiles` (permiso `perfiles`): muestra la matriz y guarda cada cambio de casilla al instante; recarga sesión y navegación porque los permisos propios pueden cambiar.
+ * @param {Object} params - Parámetros de ruta (sin uso).
+ * @param {Object} ctx - Contexto de render del router.
+ * @returns {Promise<void>}
+ */
 async function show(params, ctx) {
   let data = await model.matrix();
   const editable = session.can('perfiles');
@@ -30,4 +37,5 @@ async function show(params, ctx) {
   });
 }
 
+/** Rutas del módulo (hash path `perfiles`, permiso `perfiles`). */
 export const routes = [{ path: 'perfiles', perm: 'perfiles', section: 'perfiles', action: show }];

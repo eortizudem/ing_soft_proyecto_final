@@ -1,12 +1,20 @@
+"""Pruebas de integración del módulo catalogo (API `/api/libros`, `/api/ejemplares`, `/api/temas`).
+
+Cubren permisos, alta/edición/stock, validación, visibilidad de inactivos, búsqueda sin acentos y filtros
+(RF-08..RF-15), ejemplares con baja/reactivación (RF-11), etiqueta (RF-07), pendientes de compra e importación CSV.
+"""
+
 from app.testing import libro_payload, make_loan, sql, user_payload
 
 
 def test_permissions(alumno, anon):
+    """Escribir requiere permiso `catalogo` (403) y listar requiere sesión (401)."""
     assert alumno.post("/api/libros", json=libro_payload()).status_code == 403
     assert anon.get("/api/libros").status_code == 401
 
 
 def test_seed_books(alumno):
+    """Los libros semilla exponen existencias, disponibilidad, ubicación, precio y tipo de uso correctos."""
     libros = alumno.get("/api/libros").get_json()
     claves = {b["clave"]: b for b in libros}
     assert {"LIB001", "LIB006"} <= set(claves)
@@ -18,6 +26,7 @@ def test_seed_books(alumno):
 
 
 def test_create_update_stock(admin):
+    """Crear libro genera ejemplares; editar `ejemplares` agrega o da de baja copias disponibles."""
     r = admin.post("/api/libros", json=libro_payload(ejemplares=3, librero=7))
     assert r.status_code == 201
     b = r.get_json()
@@ -30,6 +39,7 @@ def test_create_update_stock(admin):
 
 
 def test_validation(admin):
+    """Clave duplicada y campos fuera de rango o inválidos responden 400 con mensaje."""
     ok = admin.post("/api/libros", json=libro_payload()).get_json()
     assert admin.post("/api/libros", json=libro_payload(clave=ok["clave"])).status_code == 400
     for bad in ({"ejemplares": 0}, {"ejemplares": 10001}, {"ejemplares": "x"}, {"anio_publicacion": 999},
@@ -40,6 +50,7 @@ def test_validation(admin):
 
 
 def test_stock_below_prestados_and_toggle_with_loans(admin):
+    """No se puede bajar `ejemplares` por debajo de los prestados ni inactivar un libro con préstamos activos."""
     u = admin.post("/api/usuarios", json=user_payload()).get_json()
     p = libro_payload(ejemplares=3)
     b = admin.post("/api/libros", json=p).get_json()
@@ -57,6 +68,7 @@ def test_stock_below_prestados_and_toggle_with_loans(admin):
 
 
 def test_toggle_and_visibility(admin, alumno):
+    """Inactivar oculta el libro al alumno (404/lista) pero lo deja visible al admin; reactivar lo restaura."""
     b = admin.post("/api/libros", json=libro_payload()).get_json()
     j = admin.post(f"/api/libros/{b['id_libro']}/toggle").get_json()
     assert j["estado"] == "inactivo" and j["disponibles"] == 0 and j["ejemplares"] == 3
@@ -67,6 +79,7 @@ def test_toggle_and_visibility(admin, alumno):
 
 
 def test_accent_insensitive_search(alumno):
+    """La búsqueda `q` ignora acentos y mayúsculas, y trata `%` como texto literal."""
     def claves(q):
         return [b["clave"] for b in alumno.get("/api/libros", query_string={"q": q}).get_json()]
     assert "LIB001" in claves("ingenieria de software")
@@ -80,6 +93,7 @@ def test_accent_insensitive_search(alumno):
 
 
 def test_filters_and_temas(alumno):
+    """`/api/temas`, filtro por tema y `disponibles=1` devuelven resultados coherentes."""
     assert "Literatura" in alumno.get("/api/temas").get_json()
     lit = alumno.get("/api/libros?tema=Literatura").get_json()
     assert {b["clave"] for b in lit} >= {"LIB003", "LIB006"}
@@ -94,14 +108,17 @@ from app.testing import uniq
 
 
 def _libro(admin, **over):
+    """Crea un libro vía API con `libro_payload` y devuelve su JSON."""
     return admin.post("/api/libros", json=libro_payload(**over)).get_json()
 
 
 def _ejemplares(admin, b):
+    """Devuelve los ejemplares de un libro vía API."""
     return admin.get(f"/api/libros/{b['id_libro']}/ejemplares").get_json()
 
 
 def test_ejemplares_listado_y_permisos(admin, alumno, bibliotecario):
+    """El listado de ejemplares sale numerado y requiere permiso `catalogo`; libro inexistente da 404."""
     b = _libro(admin, ejemplares=2)
     ej = _ejemplares(admin, b)
     assert [e["numero_copia"] for e in ej] == [1, 2]
@@ -114,6 +131,7 @@ def test_ejemplares_listado_y_permisos(admin, alumno, bibliotecario):
 
 @pytest.mark.parametrize("motivo", ["perdido", "robado", "danado", "obsoleto"])
 def test_baja_y_reactivar_ejemplar(admin, motivo):
+    """Cada motivo de baja actualiza existencias y bitácora; repetir baja o reactivar da 409."""
     b = _libro(admin, ejemplares=2)
     ej = _ejemplares(admin, b)[0]
     r = admin.post(f"/api/ejemplares/{ej['id_ejemplar']}/baja", json={"motivo": motivo, "observacion": "prueba"})
@@ -129,6 +147,7 @@ def test_baja_y_reactivar_ejemplar(admin, motivo):
 
 
 def test_baja_motivo_invalido_y_prestado(admin):
+    """No se da de baja un ejemplar prestado (409), con motivo inválido/ausente (400) o inexistente (404)."""
     b = _libro(admin, ejemplares=1)
     u = admin.post("/api/usuarios", json=user_payload()).get_json()
     make_loan(u["id_usuario"], b["id_libro"])
@@ -142,6 +161,7 @@ def test_baja_motivo_invalido_y_prestado(admin):
 
 
 def test_reactivar_con_libro_inactivo_y_baja_masiva_conserva_motivo(admin):
+    """No se reactiva un ejemplar si el libro está inactivo; la baja masiva por edición registra motivo."""
     b = _libro(admin, ejemplares=3)
     ej = _ejemplares(admin, b)
     admin.post(f"/api/ejemplares/{ej[0]['id_ejemplar']}/baja", json={"motivo": "robado"})
@@ -154,6 +174,7 @@ def test_reactivar_con_libro_inactivo_y_baja_masiva_conserva_motivo(admin):
 
 
 def test_reservado_no_prestable(app, admin, alumno):
+    """Un libro `reservado` no es prestable (RF-10) pero sí aparece en el filtro `tipo_uso`."""
     b = _libro(admin, tipo_uso="reservado")
     assert b["tipo_uso"] == "reservado"
     uid = sql("SELECT id_usuario FROM usuario LIMIT 1")[0]["id_usuario"]
@@ -164,6 +185,7 @@ def test_reservado_no_prestable(app, admin, alumno):
 
 
 def test_etiqueta(admin, alumno):
+    """La etiqueta incluye ficha y códigos CLAVE-NN de ejemplares no dados de baja; exige permiso y 404 si no existe."""
     b = _libro(admin, ejemplares=2)
     ej = _ejemplares(admin, b)
     admin.post(f"/api/ejemplares/{ej[0]['id_ejemplar']}/baja", json={"motivo": "danado"})
@@ -175,6 +197,7 @@ def test_etiqueta(admin, alumno):
 
 
 def _linea(recibida):
+    """Inserta una solicitud recibida con una línea sin libro; devuelve (folio, id_detalle)."""
     uid = sql("SELECT id_usuario FROM usuario LIMIT 1")[0]["id_usuario"]
     folio = "P" + uniq(8)
     sid = sql("INSERT INTO solicitud_compra(folio,id_usuario,justificacion,estado) VALUES (%s,%s,'prueba','recibida') "
@@ -185,6 +208,7 @@ def _linea(recibida):
 
 
 def test_pendientes_y_enlace_id_detalle(admin, alumno):
+    """Pendientes lista líneas recibidas sin libro; al crear el libro con `id_detalle` se enlaza y deja de ser pendiente."""
     folio, det = _linea(2)
     _, sin_recibir = _linea(0)
     pend = admin.get("/api/libros/pendientes").get_json()
@@ -201,6 +225,7 @@ def test_pendientes_y_enlace_id_detalle(admin, alumno):
 
 
 def test_filtros_por_campo_y_disponibilidad(alumno, admin):
+    """Filtros por campo (clave, autor, título, editorial) y por disponibilidad (disponible/agotado)."""
     def claves(**qs):
         return [b["clave"] for b in alumno.get("/api/libros", query_string=qs).get_json()]
     assert claves(clave="lib001") == ["LIB001"]
@@ -216,6 +241,7 @@ def test_filtros_por_campo_y_disponibilidad(alumno, admin):
 
 
 def test_importar_csv(admin, alumno):
+    """Importar CSV crea filas válidas e informa errores por línea; vacío da 400 y sin permiso 403."""
     s = uniq()
     csv_text = ("clave,titulo,autor,editorial,tema,anio_publicacion,clasificacion,sinopsis,precio_referencia,ejemplares\n"
                 f"IM{s},Uno,Autor A,Ed,Tema,2020,000 A,Sinopsis,50,2\n"

@@ -6,6 +6,7 @@ from flask.json.provider import DefaultJSONProvider
 
 
 def _scalar(o):
+    """Serializa date/datetime a ISO y Decimal a float; lanza TypeError con cualquier otro tipo."""
     if isinstance(o, (datetime, date)):
         return o.isoformat()
     if isinstance(o, Decimal):
@@ -45,6 +46,7 @@ class JSONProvider(DefaultJSONProvider):
 
     @staticmethod
     def default(o):
+        """Hook de Flask para tipos no nativos: usa `_scalar` y, si no aplica, el comportamiento por defecto."""
         try:
             return _scalar(o)
         except TypeError:

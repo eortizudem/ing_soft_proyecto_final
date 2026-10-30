@@ -1,9 +1,15 @@
-// Users HTML (pure functions: data -> components).
+/** @module modules/usuarios/view — HTML puro del módulo de usuarios (datos -> componentes): listado, formulario, ficha, historial, actualización e importación */
 import { html } from '/js/core/ui.js';
 import { LIST_LIMIT } from '/js/core/api.js';
 import { page, btn, toolbar, resultsPanel, actions, dataTable, statusBadge, formView, submitButton, detailView,
   labelItems, label, roleName, count, date, datetime, money, notice, book } from '/js/components/index.js';
 
+/**
+ * Página de listado de usuarios: búsqueda, filtros por perfil y estado, contenedor de resultados y accesos a actualizar/importar/crear.
+ * @param {Array<{nombre: string, descripcion: string}>} roles - Perfiles para el filtro.
+ * @param {{q: string, rol: string, estado: string}} filters - Valores actuales de los filtros.
+ * @returns {*} Página (componente `page`).
+ */
 export const listPage = (roles, filters) => page({
   title: 'Gestión de usuarios',
   desc: 'Consulta, registra y administra las cuentas de la comunidad.',
@@ -21,9 +27,20 @@ export const listPage = (roles, filters) => page({
     btn({ label: 'Perfiles y permisos', href: 'perfiles', variant: 'link' })])}`,
 });
 
+/**
+ * Texto de resumen del listado (total y activos).
+ * @param {Object[]} users - Usuarios cargados (con `estado`).
+ * @returns {string}
+ */
 export const summary = (users) =>
   count(users.length, undefined, LIST_LIMIT) + ` · ${users.filter((u) => u.estado === 'activo').length} activos`;
 
+/**
+ * Tabla de usuarios con clave, nombre, perfil, estado y acciones Ver/Editar.
+ * @param {Object[]} users - Usuarios (matricula, nombre_completo, rol, estado, id_usuario).
+ * @param {Object<string, string>} roles - Mapa nombre de rol -> descripción (ver `roleMap`).
+ * @returns {*} Tabla (componente `dataTable`).
+ */
 export const rows = (users, roles) => dataTable({
   rows: users,
   empty: { text: 'Prueba otro nombre, matrícula o correo.' },
@@ -36,6 +53,13 @@ export const rows = (users, roles) => dataTable({
   ],
 });
 
+/**
+ * Formulario de alta/edición de usuario.
+ * @param {Object} user - Datos actuales (nombre_completo, matricula, correo, rol, estado, fuente_validacion, id_usuario).
+ * @param {Array<{nombre: string, descripcion: string}>} roles - Perfiles seleccionables.
+ * @param {boolean} editing - true al editar (matrícula de solo lectura, contraseña opcional).
+ * @returns {*} Página con el formulario `user-form`.
+ */
 export const form = (user, roles, editing) => page({
   title: editing ? 'Editar usuario' : 'Crear usuario',
   desc: 'Los campos marcados con * son obligatorios.',
@@ -57,6 +81,13 @@ export const form = (user, roles, editing) => page({
   }),
 });
 
+/**
+ * Ficha de usuario con datos institucionales, acciones (editar, baja/reactivar) e historial.
+ * @param {Object} u - Cuenta (nombre_completo, matricula, rol, correo, estado, fuente_validacion, registro_vigente, fecha_alta, fecha_baja, prestamos_activos, adeudos_pendientes, adeudos_pendientes_n, id_usuario).
+ * @param {Object<string, string>} roles - Mapa nombre de rol -> descripción.
+ * @param {{prestamos: Object[], renovaciones: Object[], adeudos: Object[], espera: Object[], bitacora: Object[]}} hist - Historial.
+ * @returns {*} Página (componente `page`).
+ */
 export const detail = (u, roles, hist) => page({
   title: 'Ficha de usuario',
   desc: 'Datos institucionales y situación de la cuenta.',
@@ -80,10 +111,22 @@ export const detail = (u, roles, hist) => page({
   })}${historial(hist)}`,
 });
 
+/**
+ * Tarjeta con título que envuelve una tabla del historial.
+ * @param {string} title - Título de la sección.
+ * @param {*} table - Contenido (tabla).
+ * @returns {*}
+ */
 const section = (title, table) => html`<section class="card stack"><h3>${title}</h3>${table}</section>`;
+/** Celda de libro (clave y título); alias del componente `book`. */
 const libroCell = book;
 
 /** Historial de la cuenta (RF-04): préstamos, renovaciones, adeudos, lista de espera y actividad. */
+/**
+ * Historial de la cuenta (RF-04): préstamos, renovaciones, adeudos, lista de espera y actividad.
+ * @param {{prestamos: Object[], renovaciones: Object[], adeudos: Object[], espera: Object[], bitacora: Object[]}} h - Historial devuelto por la API.
+ * @returns {*} Secciones con una tabla por tipo.
+ */
 export const historial = (h) => html`<div class="stack" id="historial"><h2>Historial</h2>
   ${section('Préstamos', dataTable({ rows: h.prestamos, empty: { text: 'Sin préstamos registrados.' }, columns: [
     { label: 'Libro', render: (p) => libroCell(p.libro) },
@@ -117,8 +160,18 @@ export const historial = (h) => html`<div class="stack" id="historial"><h2>Histo
   ] }))}</div>`;
 
 // --- Actualización desde Servicios Escolares y lista de alumnos CSV (D-23) ---
+/**
+ * Insignia de la acción de sincronización de un registro.
+ * @param {string} a - 'nuevo' | 'cambio' | 'baja' | 'sin_cambios' | 'omitido'.
+ * @returns {*}
+ */
 const accionBadge = (a) => statusBadge('accionSync', a);
 
+/**
+ * Vista previa de la actualización desde Servicios Escolares (D-23); el botón aplicar se deshabilita sin cambios pendientes.
+ * @param {{registros: Object[], resumen: {nuevos: number, cambios: number, bajas: number}}} preview - Respuesta de GET /api/usuarios/actualizar.
+ * @returns {*} Página con tabla de registros y contenedor `#resultado`.
+ */
 export const syncPage = (preview) => {
   const r = preview.resumen;
   const pending = r.nuevos + r.cambios + r.bajas;
@@ -141,15 +194,29 @@ export const syncPage = (preview) => {
   });
 };
 
+/**
+ * Tabla de credenciales iniciales (se muestran una sola vez); vacío si no hay.
+ * @param {Array<{matricula: string, password: string}>} list - Credenciales generadas.
+ * @returns {*}
+ */
 const credentials = (list) => list.length ? html`<h3>Credenciales iniciales (se muestran una sola vez)</h3>
   ${dataTable({ rows: list, columns: [{ label: 'Clave', key: 'matricula' }, { label: 'Contraseña', key: 'password' }] })}` : '';
 
+/**
+ * Resultado de aplicar la actualización: aviso, omitidos y credenciales.
+ * @param {{creados: number, actualizados: number, bajas: number, omitidos: Array<{matricula: string, motivo: string}>, credenciales_iniciales: Object[]}} r - Respuesta de POST /api/usuarios/actualizar.
+ * @returns {*}
+ */
 export const syncResult = (r) => html`${notice({ tone: 'success',
   text: `Actualización aplicada: ${r.creados} alta(s), ${r.actualizados} modificación(es), ${r.bajas} baja(s).` })}
   ${r.omitidos.length ? html`<h3>Omitidos</h3>${dataTable({ rows: r.omitidos, columns: [
     { label: 'Clave', key: 'matricula' }, { label: 'Motivo', key: 'motivo' }] })}` : ''}
   ${credentials(r.credenciales_iniciales)}`;
 
+/**
+ * Página de importación de lista de alumnos por CSV (archivo y área de texto).
+ * @returns {*} Página con el formulario `import-form` y contenedor `#resultado`.
+ */
 export const importPage = () => page({
   title: 'Importar lista de alumnos (CSV)',
   desc: 'Altas y modificaciones de alumnos y docentes desde Servicios Escolares.',
@@ -165,6 +232,11 @@ export const importPage = () => page({
   })}<div id="resultado"></div>`,
 });
 
+/**
+ * Resultado de la importación: aviso, errores por línea y credenciales.
+ * @param {{creados: number, actualizados: number, errores: Array<{linea: number, motivo: string}>, credenciales_iniciales: Object[]}} r - Respuesta de POST /api/usuarios/importar.
+ * @returns {*}
+ */
 export const importResult = (r) => html`${notice({ tone: 'success',
   text: `Importación terminada: ${r.creados} alta(s), ${r.actualizados} modificación(es), ${r.errores.length} error(es).` })}
   ${r.errores.length ? html`<h3>Errores por línea</h3>${dataTable({ rows: r.errores, columns: [
