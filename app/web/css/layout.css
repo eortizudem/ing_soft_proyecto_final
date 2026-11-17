@@ -1,4 +1,4 @@
-/* App shell and page structure. Spacing comes only from the --space-* tokens. */
+/* Estructura de la aplicación y de las páginas. El espaciado sale solo de los tokens --space-*. */
 
 .brand {
   display:flex;
@@ -19,7 +19,7 @@
   object-fit:contain;
 }
 
-/* ---- Login ---- */
+/* ---- Inicio de sesión ---- */
 .login {
   display:grid;
   grid-template-columns:46.53% 1fr;
@@ -58,7 +58,7 @@
   max-width:800px;
 }
 
-/* ---- Sidebar ---- */
+/* ---- Barra lateral ---- */
 .sidebar {
   position:fixed;
   left:0;
@@ -117,7 +117,7 @@ nav .btn.active {
   width:100%;
 }
 
-/* ---- Workspace ---- */
+/* ---- Área de trabajo ---- */
 .workspace {
   margin-left:236px;
   min-height:100vh;
@@ -205,7 +205,7 @@ nav .btn.active {
   background:var(--bg);
 }
 
-/* Narrow containers: the toolbar stacks (also inside the mobile frame). */
+/* Contenedores angostos: la barra de herramientas se apila (también dentro del marco móvil). */
 .mobile-frame .toolbar {
   flex-direction:column;
   align-items:stretch;
@@ -398,8 +398,8 @@ nav .btn.active {
     background:#fff;
   }
 
-  /* Receipts (préstamo, compra, pago de adeudo) and the catálogo ficha/etiquetas: black on white, borders
-     instead of colour, so they read the same on a grayscale printer. */
+  /* Recibos (préstamo, compra, pago de adeudo) y ficha/etiquetas del catálogo: negro sobre blanco, bordes
+     en lugar de color, para que se lean igual en una impresora en escala de grises. */
   #print-root .receipt {
     display:block;
     margin:0 0 8mm;

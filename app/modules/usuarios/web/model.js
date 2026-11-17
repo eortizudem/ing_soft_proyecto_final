@@ -36,11 +36,11 @@ export const syncApply = () => api.post('/usuarios/actualizar', {});
  */
 export const importCsv = (csv) => api.post('/usuarios/importar', { csv });
 /**
- * Da de baja o reactiva una cuenta. Llama a POST /api/usuarios/:id/toggle.
+ * Da de baja o reactiva una cuenta. Llama a POST /api/usuarios/:id/estado.
  * @param {number|string} id - Identificador de la cuenta.
  * @returns {Promise<Object>} Cuenta con su nuevo estado.
  */
-export const toggle = (id) => api.post(`/usuarios/${encodeURIComponent(id)}/toggle`);
+export const alternar = (id) => api.post(`/usuarios/${encodeURIComponent(id)}/estado`);
 
 /**
  * Crea o edita una cuenta recortando espacios. Llama a PUT /api/usuarios/:id si hay `id`, si no a POST /api/usuarios.

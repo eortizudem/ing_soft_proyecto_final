@@ -39,7 +39,7 @@
   --font:'Roboto',Arial,sans-serif;
   --mono:'Roboto Mono',monospace;
 
-  /* spacing scale: every margin, gap and padding uses these */
+  /* escala de espaciado: todo margen, separación y relleno usa estos valores */
   --space-1:4px;
   --space-2:8px;
   --space-3:12px;
@@ -163,7 +163,7 @@ button:disabled {
   text-transform:uppercase;
 }
 
-/* ---- Form controls: every text-like control, everywhere ---- */
+/* ---- Controles de formulario: todos los de tipo texto, en cualquier pantalla ---- */
 :where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="hidden"])),
 select,
 textarea {

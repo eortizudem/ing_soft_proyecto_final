@@ -1,7 +1,7 @@
 """Pruebas del registro de errores del sistema (PS-S3-06): errores del navegador (`POST /api/errores`), limite de frecuencia, errores 500 del servidor y tolerancia a fallos del registro."""
 import pytest
 
-from app.core import errores
+from app.core import bitacora_errores
 from app.testing import sql, uniq
 
 
@@ -14,9 +14,9 @@ def _ultimos(patron):
 @pytest.fixture(autouse=True)
 def _sin_limites():
     """Fixture autouse: reinicia los contadores del limite antes y despues de cada prueba."""
-    errores.reiniciar_limites()
+    bitacora_errores.reiniciar_limites()
     yield
-    errores.reiniciar_limites()
+    bitacora_errores.reiniciar_limites()
 
 
 def test_cliente_anonimo_queda_en_bitacora_sin_usuario(anon):
@@ -52,11 +52,11 @@ def test_limite_por_cliente(anon):
 
 def test_limite_ventana_y_global():
     """La ventana de 60 s expira y existe un tope global de 60 errores."""
-    assert all(errores.dentro_del_limite("1.1.1.1", ahora=0) for _ in range(5))
-    assert not errores.dentro_del_limite("1.1.1.1", ahora=1)
-    assert errores.dentro_del_limite("1.1.1.1", ahora=61)       # la ventana de 60 s expira
-    errores.reiniciar_limites()
-    ok = [errores.dentro_del_limite(f"ip{n}", ahora=0) for n in range(70)]
+    assert all(bitacora_errores.dentro_del_limite("1.1.1.1", ahora=0) for _ in range(5))
+    assert not bitacora_errores.dentro_del_limite("1.1.1.1", ahora=1)
+    assert bitacora_errores.dentro_del_limite("1.1.1.1", ahora=61)       # la ventana de 60 s expira
+    bitacora_errores.reiniciar_limites()
+    ok = [bitacora_errores.dentro_del_limite(f"ip{n}", ahora=0) for n in range(70)]
     assert ok.count(True) == 60                                      # tope global
 
 
@@ -88,6 +88,6 @@ def test_registrar_nunca_lanza(app, monkeypatch):
         """Sustituto de `db.connect` que simula la base caida."""
         raise RuntimeError("sin base de datos")
 
-    monkeypatch.setattr(errores.db, "connect", malo)
+    monkeypatch.setattr(bitacora_errores.db, "connect", malo)
     with app.app_context():
-        assert errores.registrar("servidor", "x") is False
+        assert bitacora_errores.registrar("servidor", "x") is False

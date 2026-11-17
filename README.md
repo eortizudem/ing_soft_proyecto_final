@@ -8,7 +8,7 @@ Sistema web de gestión bibliotecaria para la Universidad Ducky (proyecto final 
 | --- | --- | --- |
 | U1 | Docker + PostgreSQL + Flask; sin otros frameworks ni ORM | Flask 3 + psycopg 3 con SQL explícito (`app/core/db.py`, `app/core/repo.py`) |
 | U2 | Frontend ligero: JavaScript vanilla + CSS plano, **sin build, sin bundler, sin CDNs** | Módulos ES nativos servidos por Flask; fuentes y logos locales en `app/web/assets/` |
-| U3 | Esquema oficial de **21 tablas**; solo cambios aditivos, necesarios y documentados | Cinco adiciones S-1..S-5, sin tablas nuevas (ver [Base de datos](#base-de-datos)) |
+| U3 | Esquema oficial de **21 tablas**; solo cambios aditivos, necesarios y documentados | Seis adiciones S-1..S-6, sin tablas nuevas (ver [Base de datos](#base-de-datos)) |
 | U4 | MVC modular unificado: cada módulo contiene su backend, su frontend y sus pruebas | `app/modules/<m>/{model,service,controller}.py`, `web/{model,view,controller}.js`, `tests/` |
 | U5 | Helpers y componentes compartidos; nada se reimplementa en los módulos | [`app/core/README.md`](app/core/README.md) y [`app/web/js/components/README.md`](app/web/js/components/README.md) |
 | U6 | Scripts de operación en Python (solo biblioteca estándar) | `scripts/*.py` |
@@ -18,11 +18,12 @@ Sistema web de gestión bibliotecaria para la Universidad Ducky (proyecto final 
 
 | Capa | Tecnología |
 | --- | --- |
-| Contenedores | Docker + Docker Compose (servicios `db` y `web`, `restart: unless-stopped`, healthchecks) |
+| Contenedores | Docker + Docker Compose (servicios `db`, `web` y `ollama`, `restart: unless-stopped`, healthchecks) |
 | Base de datos | PostgreSQL 16 (`postgres:16-alpine`) con extensión `unaccent` |
-| Backend | Python 3.12, Flask 3, psycopg 3, gunicorn (2 workers) |
+| Backend | Python 3.12, Flask 3, psycopg 3, gunicorn (4 procesos, `WEB_CONCURRENCY`) |
 | Frontend | JavaScript vanilla (ESM) y CSS plano |
-| Pruebas | pytest contra la base de datos real del contenedor (219 pruebas) |
+| IA del asistente | Ollama (`ollama/ollama`) con el modelo `qwen2.5:1.5b`, local y solo CPU (ver [Asistente](#asistente-conversacional-con-ia-local-ollama)) |
+| Pruebas | pytest contra la base de datos real del contenedor (suite completa en `app/core/tests/` y `app/modules/*/tests/`) |
 
 ## Requisitos
 
@@ -44,7 +45,7 @@ Abre <http://localhost:8000> e inicia sesión con una [cuenta demo](#cuentas-de-
 
 | Script | Para qué | Opciones |
 | --- | --- | --- |
-| `scripts/levantar.py` | Construye y levanta los contenedores | `--no-build`, `--logs`, `--down` |
+| `scripts/levantar.py` | Construye y levanta los contenedores | `--no-build`, `--logs`, `--sin-ia`, `--down` |
 | `scripts/recrear_db.py` | Recrea la BD y la siembra (**destruye los datos**) | `-y/--yes`, `--sin-semilla` |
 | `scripts/respaldo.py` | Respaldo `pg_dump -Fc` en `backups/` | `--salida DIR`, `--db NOMBRE`, `--usuario U` |
 | `scripts/restaurar.py` | Restaura un respaldo o lo verifica | `archivo.dump`, `--db`, `--usuario`, `-y/--yes`, `--verificar` |
@@ -96,14 +97,14 @@ Permiso = clave de menú = `section` de las rutas. Las pantallas son rutas de ha
 | --- | --- | --- | --- | --- |
 | `auth` | Login, visitante, logout, recuperación de contraseña | `POST login`, `visitante`, `logout`, `recuperar`, `recuperar/confirmar`; `GET me` | Inicio de sesión, recuperar contraseña | público / sesión |
 | `inicio` | Tablero por perfil: personal (conteos, presupuesto) y estado propio | `GET stats` | `inicio` | sesión |
-| `usuarios` | Alta, edición, baja lógica, **historial**, **actualización desde Servicios Escolares** con Servicios Escolares, **importación CSV** | `GET/POST usuarios`, `GET/PUT usuarios/<id>`, `POST usuarios/<id>/toggle`, `GET usuarios/<id>/historial`, `GET/POST usuarios/actualización/simulada`, `POST usuarios/importar` | `usuarios`, `usuarios/nuevo`, `usuarios/:id`, `usuarios/:id/editar`, `usuarios/actualizar`, `usuarios/importar` | `usuarios` |
+| `usuarios` | Alta, edición, baja lógica, **historial**, **actualización desde Servicios Escolares** con Servicios Escolares, **importación CSV** | `GET/POST usuarios`, `GET/PUT usuarios/<id>`, `POST usuarios/<id>/estado`, `GET usuarios/<id>/historial`, `GET/POST usuarios/actualización/simulada`, `POST usuarios/importar` | `usuarios`, `usuarios/nuevo`, `usuarios/:id`, `usuarios/:id/editar`, `usuarios/actualizar`, `usuarios/importar` | `usuarios` |
 | `perfiles` | Matriz rol-permiso | `GET roles`, `PUT roles/<rol>/permisos/<permiso>` | `perfiles` | sesión / `perfiles` |
-| `catalogo` | Fichas, búsqueda sin acentos, ubicación, **ejemplares** (baja con motivo, reactivar), **etiquetas** imprimibles, **pendientes de catalogar**, importación CSV | `GET libros`, `GET libros/<id>`, `POST/PUT libros`, `POST libros/<id>/toggle`, `GET temas`, `GET libros/<id>/ejemplares`, `GET libros/<id>/etiqueta`, `GET libros/pendientes`, `POST libros/importar`, `POST ejemplares/<id>/baja`, `POST ejemplares/<id>/reactivar` | `catalogo`, `libros/nuevo`, `libros/pendientes`, `libros/importar`, `libros/:id`, `libros/:id/editar`, `buscar`, `libros/:id/ubicacion`, `movil`, `movil/:id` | `catalogo` (alta/baja); `buscar`/sesión (consulta) |
+| `catalogo` | Fichas, búsqueda sin acentos, ubicación, **ejemplares** (baja con motivo, reactivar), **etiquetas** imprimibles, **pendientes de catalogar**, importación CSV | `GET libros`, `GET libros/<id>`, `POST/PUT libros`, `POST libros/<id>/estado`, `GET temas`, `GET libros/<id>/ejemplares`, `GET libros/<id>/etiqueta`, `GET libros/pendientes`, `POST libros/importar`, `POST ejemplares/<id>/baja`, `POST ejemplares/<id>/reactivar` | `catalogo`, `libros/nuevo`, `libros/pendientes`, `libros/importar`, `libros/:id`, `libros/:id/editar`, `buscar`, `libros/:id/ubicacion`, `movil`, `movil/:id` | `catalogo` (alta/baja); `buscar`/sesión (consulta) |
 | `compras` | Solicitudes con **presupuesto mensual**, envío, cancelación, **recibir el pedido completo o por partes, con factura** | `GET/POST compras`, `GET compras/<id>`, `GET compras/presupuesto`, `POST compras/<id>/enviar`, `/cancelar`, `/recibir` | `compras`, `compras/nueva`, `compras/revisar`, `compras/:id`, `compras/:id/recibir` | `compras` |
 | `prestamos` | Validar y registrar préstamo (RN-01), renovar, devolver, recibo (correo/WhatsApp, imprimir, PDF), **políticas** editables | `GET prestamos`, `POST prestamos/validar`, `POST prestamos`, `GET prestamos/<id>`, `POST prestamos/<id>/renovar`, `/devolver`, `GET prestamos/<id>/recibo`, `POST prestamos/<id>/recibo/enviar`, `GET/PUT politicas` | `prestamos`, `prestamos/nuevo`, `prestamos/:id`, `politicas`, `politicas/:id` | `prestamos`; políticas: `perfiles` para editar |
 | `espera` | Lista de espera FIFO con reservado y expiración; los usuarios se unen y cancelan por su cuenta | `GET espera`, `GET espera/libros`, `POST espera`, `GET espera/mias`, `POST espera/unirse`, `DELETE espera/<id>` | `espera`, `espera/nueva`, `espera/mias`, `espera/unirse/:id_libro` | `espera` (gestión); sesión (`mias`, `unirse`, cancelar la propia) |
-| `adeudos` | Multas, **pago con referencia de Tesorería**, cancelación (admin), **pérdida** y **daño**, tipo de cambio | `GET adeudos`, `GET adeudos/<id>`, `POST adeudos/<id>/pago`, `/cancelar`, `GET adeudos/reposicion`, `GET adeudos/prestamo/<id>`, `POST adeudos/perdida`, `POST adeudos/danio`, `GET tipo-cambio` | `adeudos`, `adeudos/:id`, `adeudos/:id/pago`, `adeudos/:id/cancelar`, `adeudos/perdida/:id`, `adeudos/danio/:id` | `adeudos` (cancelar: rol `admin`) |
-| `asistente` | Chatbot por reglas: FAQ, reglas con valores reales de la política, búsqueda de libros, estatus propio, **paso a bibliotecario** | `POST asistente/mensajes`, `GET asistente/conversaciones/<id>`, `POST …/opinion`, `GET asistente/consultas`, `POST asistente/consultas/<id>/resolver` | `asistente`, `movil/asistente`, `asistente/consultas`, `asistente/consultas/:id` | `asistente`; lista de avisosja: `prestamos` |
+| `adeudos` | Multas, **pago con referencia de Tesorería**, cancelación (admin), **pérdida** y **daño**, tipo de cambio | `GET adeudos`, `GET adeudos/<id>`, `POST adeudos/<id>/pago`, `/cancelar`, `GET adeudos/reposicion`, `GET adeudos/prestamo/<id>`, `POST adeudos/perdida`, `POST adeudos/danio`, `GET tipo_cambio` | `adeudos`, `adeudos/:id`, `adeudos/:id/pago`, `adeudos/:id/cancelar`, `adeudos/perdida/:id`, `adeudos/danio/:id` | `adeudos` (cancelar: rol `admin`) |
+| `asistente` | Chatbot con IA local (Ollama) y reglas como contexto y plan B: FAQ, reglas con valores reales de la política, búsqueda de libros, estatus propio, **paso a bibliotecario** | `POST asistente/mensajes`, `GET asistente/estado`, `GET asistente/conversaciones/<id>`, `POST …/opinion`, `GET asistente/consultas`, `POST asistente/consultas/<id>/resolver` | `asistente`, `movil/asistente`, `asistente/consultas`, `asistente/consultas/:id` | `asistente`; lista de avisosja: `prestamos` |
 | `reportes` | Catálogo, usuarios, **alumnos con adeudos** (+ aviso a Servicios Escolares), **inventario por estante**, **préstamos vencidos**, **préstamos por periodo**, **indicadores** (asistente sin pasar a bibliotecario, consultas para el bibliotecario pendientes, discrepancias de inventario, préstamos por mes) e **errores**; pantalla, PDF e impresión; el formulario muestra solo los filtros del tipo elegido | `GET reportes/<tipo>`, `POST reportes/con_adeudos/aviso` | `reportes`, `reportes/:tipo` | `reportes`; además `usuarios` (usuarios) o `prestamos` (alumnos con adeudos, vencidos, préstamos) |
 | `notificaciones` | Avisos enviados (simulados) (todos los canales) y "mis notificaciones" | `GET notificaciones`, `GET notificaciones/mias` | `notificaciones`, `notificaciones/mias` | `notificaciones`; `mias`: sesión |
 | `info` | FAQ, estado del servicio, diseño, guía y funciones | `GET faq`, `GET health` | `diseno`, `guia`, `funciones` | público / `diseno`, `guia`, `funciones` |
@@ -118,7 +119,7 @@ Errores: `{"error": "mensaje"}`. Reglas incumplidas: **422** `{"error", "motivos
 proyecto_final/
 ├── docker-compose.yml  Dockerfile  requirements.txt  pytest.ini  conftest.py  .env.example
 ├── db/
-│   ├── 01_schema.sql            esquema (21 tablas + adiciones S-1..S-5)
+│   ├── 01_schema.sql            esquema (21 tablas + adiciones S-1..S-6)
 │   └── 02_seed.sql              roles, permisos, políticas, libros, ejemplares, intenciones, FAQ
 ├── scripts/                     levantar  recrear_db  respaldo  restaurar  medir_rendimiento  cargar_datos_volumen  (_pg: ayudas)
 ├── docs/
@@ -168,7 +169,7 @@ Flujo: `controller → service → model` en el servidor; `controller → model 
 
 ## Componentes y helpers compartidos
 
-- **Backend** — [`app/core/README.md`](app/core/README.md): `repo`, `validators`, `auth`, `errors` (`ApiError.reglas`, `exigir`), `bitacora` (`@audit`), `calendario` (días hábiles), `parametros`, `notificaciones`, `circulacion` (única fuente de RN-01..06), `espera`, `consultas`, `serializers`, `http`.
+- **Backend** — [`app/core/README.md`](app/core/README.md): `repo`, `validators`, `auth`, `excepciones` (`ApiError.reglas`, `exigir`), `bitacora` (`@audit`), `calendario` (días hábiles), `parametros`, `notificaciones`, `circulacion` (única fuente de RN-01..06), `espera`, `consultas`, `serializers`, `http`.
 - **Frontend** — [`app/web/js/components/README.md`](app/web/js/components/README.md): `page`, `listPage`, `dataTable`, `formView`/`bindForm`, `detailView`, `receiptBlock`, `statusBadge`/`labels`, `meter`, `chatPanel`, `confirmAction`, `printHtml`, etc.
 - Regla: **los módulos no reimplementan nada de esto** (sin SQL dinámico propio, sin validación a mano, sin tablas/formularios/etiquetas ad hoc).
 
@@ -238,9 +239,24 @@ Todas las decisiones de circulación salen de `app/core/circulacion.py` (RN-01..
 
 Otras reglas vigentes: matrícula de 3 a 10 caracteres, correo válido, contraseña mínima de 6; no se da de baja una cuenta con préstamos abiertos o adeudos pendientes, la propia cuenta ni al último administrador; el administrador no puede perder `usuarios` ni `perfiles`; clave de libro única de 3 a 10 caracteres y no se dan de baja libros con préstamos activos ni ejemplares prestados; sesión por cookie firmada (HttpOnly, SameSite=Lax, 12 h).
 
-### Asistente conversacional (basado en reglas, sin LLM)
+### Asistente conversacional con IA local (Ollama)
 
-Normaliza el texto (minúsculas, sin acentos), detecta el tema de la pregunta por palabras clave y similitud con `pregunta_frecuente`, y responde con datos reales: reglas desde `politica_prestamo`, búsqueda de libros (máx. 5, con disponibilidad y ubicación) y, con sesión iniciada, estatus de préstamos y multas propios. Una petición explícita ("hablar con un bibliotecario") o dos mensajes consecutivos no entendidos **pasan a bibliotecario** la conversación a la bandeja del bibliotecario (`#/asistente/consultas`, permiso `prestamos`). Cada mensaje queda en `mensaje`; el visitante solo ve sus propias conversaciones.
+El asistente usa un **modelo de lenguaje real que corre en tu equipo** (contenedor `ollama`), sin enviar datos a servicios externos. Cada mensaje sigue este camino:
+
+1. Las reglas detectan la intención (palabras clave y similitud con `pregunta_frecuente`) y consultan la base. El CONTEXTO siempre lleva la fecha y hora de hoy, el horario, la política vigente y las preguntas frecuentes más parecidas; además, libros con disponibilidad y ubicación (máx. 5) y, con sesión iniciada, **solo los préstamos, adeudos y lista de espera del propio usuario**.
+2. Ese resultado se entrega al modelo como CONTEXTO junto con los últimos mensajes de la conversación. El modelo redacta una respuesta breve (máx. 4 frases) usando solo ese contexto; si algo no está, responde con la marca `[SIN_DATOS]` (que se oculta), dice que no lo sabe y ofrece hablar con un bibliotecario. También se consulta al modelo cuando las reglas no entendieron el tema (p. ej. "¿qué día es hoy?"). El texto del usuario va solo en el rol `user` (el modelo no tiene herramientas ni acceso a la base).
+3. Se descarta la respuesta si cita cifras, fechas o títulos que no están en el contexto, o si contesta con conocimiento general ajeno a la biblioteca.
+4. **Plan B:** con `ASISTENTE_IA=0`, Ollama detenido, modelo sin descargar, tiempo agotado (`OLLAMA_TIMEOUT`) o respuesta no respaldada, responde con las reglas. Cada respuesta trae `fuente: "ia"` o `"reglas"` y la pantalla muestra "Respuestas con IA (modelo)" o "Modo básico". Los avisos de caída se anotan en Errores (máx. uno cada 10 min).
+
+El paso a **bibliotecario** siempre es por reglas: petición explícita (inmediato) o dos respuestas seguidas de "no sé" (si la IA contestó bien, no cuenta como no entendido). Cada mensaje queda en `mensaje`; el visitante solo ve sus propias conversaciones.
+
+| Tema | Detalle |
+| --- | --- |
+| Modelo por defecto | `qwen2.5:1.5b`: ~1 GB de descarga la **primera vez**, ~1.4 GB de RAM, solo CPU; guardado en el volumen `ollama_models`. Se eligió sobre `qwen2.5:0.5b` (400 MB) porque este contestaba mal o muy corto (ver comparación en [`docs/operacion.md`](docs/operacion.md)) |
+| Cambiar de modelo | `OLLAMA_MODEL=qwen2.5:0.5b` en `.env` (~400 MB, ~0.8 GB de RAM, respuestas más pobres) y `python3 scripts/levantar.py --no-build`; cualquier modelo de [ollama.com/library](https://ollama.com/library) sirve |
+| Desactivar | `ASISTENTE_IA=0` en `.env` (solo reglas) o `python3 scripts/levantar.py --sin-ia` (no descarga el modelo) |
+| Primera vez | `levantar.py` descarga el modelo con progreso y lo precalienta; sin internet el sistema funciona igual con reglas |
+| Recursos | `ollama` tiene tope de memoria `OLLAMA_MEM_LIMIT` (2 GB); el modelo se descarga de RAM tras 10 min sin uso. Mediciones en [`docs/operacion.md`](docs/operacion.md) |
 
 ## Notificaciones e integraciones simuladas
 
@@ -260,7 +276,7 @@ La actualización desde Servicios Escolares es un archivo simulado (`app/modules
 Con los contenedores levantados:
 
 ```bash
-docker compose exec -T web pytest                 # las 236 pruebas
+docker compose exec -T web pytest                 # toda la suite de pruebas
 docker compose exec -T web pytest app/modules/prestamos
 docker compose exec -T web pytest app/core
 ```
@@ -293,6 +309,12 @@ Se leen de `.env` (creado desde `.env.example` por `levantar.py`) y las usa `doc
 | `PRESUPUESTO_MENSUAL_USD` | `5000` | Presupuesto mensual de adquisiciones |
 | `ESPERA_DIAS_RESERVA` | `2` | Días hábiles que se aparta un libro al primero de la lista de espera |
 | `DEMO_MOSTRAR_TOKEN` | `true` (demo) | `true`: la recuperación de contraseña devuelve el código en pantalla. `false` (producción): la API solo responde `ok` y el código queda como correo simulado en Notificaciones |
+| `ASISTENTE_IA` | `1` | `1`: el asistente redacta con el modelo local; `0`: solo reglas |
+| `OLLAMA_MODEL` | `qwen2.5:1.5b` | Modelo de Ollama que usa el asistente |
+| `OLLAMA_TIMEOUT` | `20` | Segundos máximos esperando al modelo; al vencer se usan las reglas |
+| `OLLAMA_MEM_LIMIT` | `2g` | Memoria máxima del contenedor `ollama` |
+| `OLLAMA_URL` | `http://ollama:11434` (compose) | Dirección de Ollama (no va en `.env`) |
+| `WEB_PORT` | `8000` | Puerto de la aplicación en tu equipo |
 | `HTTPS` | `false` | `true` cuando un proxy inverso termina TLS: la cookie de sesión se marca `Secure` (siempre `HttpOnly` y `SameSite=Lax`) |
 | `WEB_CONCURRENCY` | `4` | Procesos de gunicorn |
 | `DATABASE_URL` | construida por compose | Conexión de la aplicación (no va en `.env`) |
@@ -310,13 +332,14 @@ Tras cambiar variables: `docker compose up -d web`.
 | [`decisiones_para_validacion.md`](docs/requisitos/decisiones_para_validacion.md) | Hoja de revisión de D-01..D-29 con columna de firma del Product Owner (pendiente) |
 | [`../uat.md`](docs/uat.md) | Guion de pruebas de aceptación (UAT) por rol con resultados del E2E del 2026-10-27 |
 | [`../operacion.md`](docs/operacion.md) | Guía de operación (fuera de `requisitos/`) |
+| [`../estandar_de_codigo.md`](docs/estandar_de_codigo.md) | Estándar de código: reglas de backend, frontend, base de datos, CSS, pruebas, scripts y Git |
 
 ## Alcance y limitaciones
 
 - **Integraciones simuladas:** Servicios Escolares, Tesorería, correo y WhatsApp no existen como servicios reales; todo queda en la lista de avisos en `bitacora` (la conexión real queda fuera de alcance).
 - **Sin app nativa:** la vista web responsiva (`#/movil`, `#/movil/asistente`) cubre la "APP"; no hay React Native, Redis ni JWT (cookie de sesión firmada).
 - **Recuperación de contraseña:** no envía correo; con `DEMO_MOSTRAR_TOKEN=true` (demo) la pantalla muestra el token generado; con `false` solo queda en la lista de avisos simulada.
-- **Asistente:** basado en reglas y FAQ, sin modelo de lenguaje ni SLA de respuesta del bibliotecario.
+- **Asistente:** usa un modelo pequeño local (Ollama, CPU) con las reglas como contexto y plan B; un modelo de ese tamaño puede equivocarse, y no hay SLA de respuesta del bibliotecario.
 - **Calendario:** sin festivos; solo se excluyen sábado y domingo (D-03).
 - **Fuera de alcance (D-18):** préstamo de revistas, vigilancia de puerta y colocación física de libreros.
 - **Decisiones D-xx** sin validar por el Product Owner; las políticas y el tipo de cambio son parámetros.

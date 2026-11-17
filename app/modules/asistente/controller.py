@@ -11,10 +11,22 @@ def mensaje():
     """POST /api/asistente/mensajes. Permiso: `asistente` (incluye visitantes, D-26).
 
     Payload JSON: `{texto, id_conversacion?, canal?}`.
-    Respuesta 200: `{id_conversacion, respuesta: {texto, intencion, con_bibliotecario, libros?, enlaces?}}`.
+    Respuesta 200: `{id_conversacion, respuesta: {texto, intencion, con_bibliotecario, fuente, libros?, enlaces?}}`;
+    `fuente` es `"ia"` (redactada por el modelo con datos de la biblioteca) o `"reglas"` (respuesta por reglas).
     Errores: 400 payload invalido; 401 sin sesion; 403 sin permiso; 404 conversacion ajena o inexistente.
     """
     return service.enviar_mensaje(body(), current_user())
+
+
+@bp.get("/api/asistente/estado")
+@permission_required("asistente")
+def estado():
+    """GET /api/asistente/estado. Permiso: `asistente`.
+
+    Respuesta 200: `{ia: bool, modelo: str | null}`; `ia` es verdadero si la IA esta activada y el modelo responde
+    (la pantalla muestra "Respuestas con IA" o "Modo básico"). Errores: 401, 403.
+    """
+    return service.estado()
 
 
 @bp.get("/api/asistente/conversaciones/<int:id_conversacion>")

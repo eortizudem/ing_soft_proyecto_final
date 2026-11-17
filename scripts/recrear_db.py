@@ -2,15 +2,15 @@
 """Recrea por completo la base de datos de LibriGest y la siembra.
 
 Uso:
-  python scripts/recrear_db.py              # pide confirmacion [s/N], recrea y siembra
-  python scripts/recrear_db.py -y           # igual, sin confirmacion (--yes)
+  python scripts/recrear_db.py              # pide confirmación [s/N], recrea y siembra
+  python scripts/recrear_db.py -y           # igual, sin confirmación (--yes)
   python scripts/recrear_db.py --sin-semilla  # solo esquema: omite db/*seed*.sql y la semilla de usuarios
 
-Pasos: levanta el contenedor db y espera pg_isready; DROP SCHEMA public CASCADE + CREATE SCHEMA + extension
-unaccent; aplica todos los db/*.sql en orden alfabetico; (salvo --sin-semilla) arranca web y ejecuta la semilla
+Pasos: levanta el contenedor db y espera pg_isready; DROP SCHEMA public CASCADE + CREATE SCHEMA + extensión
+unaccent; aplica todos los db/*.sql en orden alfabético; (salvo --sin-semilla) arranca web y ejecuta la semilla
 de usuarios y compras (python -m app.seed); imprime las filas por tabla.
 
-Codigos de salida: 0 correcto; 1 cancelado por el usuario o error de docker/PostgreSQL/SQL (o el codigo del
+Códigos de salida: 0 correcto; 1 cancelado por el usuario o error de docker/PostgreSQL/SQL (o el código del
 paso que fallo).
 
 SEGURIDAD: DESTRUCTIVO. Borra TODOS los datos de la base configurada (POSTGRES_DB). Sin -y exige responder
@@ -38,7 +38,7 @@ def salir(msg, codigo=1):
 
     Args:
         msg: mensaje de error.
-        codigo: codigo de salida (1 por defecto).
+        codigo: código de salida (1 por defecto).
 
     Raises:
         SystemExit: siempre.
@@ -48,7 +48,7 @@ def salir(msg, codigo=1):
 
 
 def dc(args, **kw):
-    """Ejecuta `docker compose <args>` en la raiz del proyecto.
+    """Ejecuta `docker compose <args>` en la raíz del proyecto.
 
     Args:
         args: lista de argumentos de compose.
@@ -83,10 +83,10 @@ def chequear(res, paso):
 
     Args:
         res: CompletedProcess devuelto por `psql`/`dc`.
-        paso: descripcion del paso, para los mensajes.
+        paso: descripción del paso, para los mensajes.
 
     Raises:
-        SystemExit: con el codigo del proceso si fallo (tras volcar su stderr).
+        SystemExit: con el código del proceso si fallo (tras volcar su stderr).
     """
     if res.returncode:
         sys.stderr.write(res.stderr.decode("utf-8", "replace"))
@@ -98,7 +98,7 @@ def main():
     """Punto de entrada: confirma, recrea el esquema, aplica db/*.sql, siembra y cuenta filas.
 
     Returns:
-        None. Termina con `sys.exit` ante cancelacion o error (ver codigos en el docstring del modulo).
+        None. Termina con `sys.exit` ante cancelación o error (ver códigos en el docstring del módulo).
     """
     ap = argparse.ArgumentParser(description="Recrea y siembra la base de datos.")
     ap.add_argument("-y", "--yes", action="store_true", help="no pedir confirmación")
@@ -129,7 +129,7 @@ def main():
     print("Recreando esquema:")
     chequear(psql(b"DROP SCHEMA public CASCADE; CREATE SCHEMA public; "
                   b"CREATE EXTENSION IF NOT EXISTS unaccent;"), "borrar esquema public")
-    # Todos los db/*.sql en orden alfabetico (01_schema, 02_seed, ...); --sin-semilla omite los que contienen "seed".
+    # Todos los db/*.sql en orden alfabético (01_schema, 02_seed, ...); --sin-semilla omite los que contienen "seed".
     for archivo in sorted((RAIZ / "db").glob("*.sql")):
         if a.sin_semilla and "seed" in archivo.stem:
             continue

@@ -8,8 +8,8 @@ import { install as reportErrors } from '/js/core/errores.js';
 import * as auth from '/m/auth/controller.js';
 import * as info from '/m/info/controller.js';
 
-// Feature modules are discovered at runtime: a missing or broken module is skipped (and logged),
-// it never breaks the shell. auth and info are mandatory and imported statically above.
+// Los módulos se descubren al arrancar: uno ausente o roto se omite (con aviso)
+// y nunca rompe el shell. auth e info son obligatorios y se importan estáticamente arriba.
 /** @type {string[]} Carpetas de módulos opcionales bajo /m/ (cada una con su controller.js). */
 const MODULES = ['inicio', 'usuarios', 'perfiles', 'catalogo', 'compras', 'prestamos', 'espera', 'adeudos',
   'asistente', 'reportes', 'notificaciones'];

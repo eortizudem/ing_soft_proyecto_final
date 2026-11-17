@@ -3,14 +3,14 @@
 from app.testing import make_loan, sql, user_payload, libro_payload
 
 
-def test_permission_403(alumno, anon):
+def test_sin_permiso_responde_403(alumno, anon):
     """Sin permiso `usuarios` responde 403 y sin sesión 401."""
     assert alumno.get("/api/usuarios").status_code == 403
     assert alumno.post("/api/usuarios", json=user_payload()).status_code == 403
     assert anon.get("/api/usuarios").status_code == 401
 
 
-def test_crud(admin):
+def test_alta_consulta_y_actualizacion(admin):
     """Alta, edición, consulta y filtros de una cuenta funcionan de punta a punta."""
     p = user_payload()
     r = admin.post("/api/usuarios", json=p)
@@ -27,7 +27,7 @@ def test_crud(admin):
     assert ids == [u["id_usuario"]]
 
 
-def test_validation_and_duplicates(admin):
+def test_validaciones_y_duplicados(admin):
     """Rechaza datos inválidos y matrícula/correo duplicados."""
     p = user_payload()
     assert admin.post("/api/usuarios", json=p).status_code == 201
@@ -40,17 +40,17 @@ def test_validation_and_duplicates(admin):
     assert admin.post("/api/usuarios", json={k: v for k, v in user_payload().items() if k != "password"}).status_code == 400
 
 
-def test_matricula_uppercased(admin):
+def test_matricula_se_guarda_en_mayusculas(admin):
     """La matrícula se normaliza a mayúsculas."""
     p = user_payload()
     p["matricula"] = p["matricula"].lower()
     assert admin.post("/api/usuarios", json=p).get_json()["matricula"] == p["matricula"].upper()
 
 
-def test_cannot_touch_own_account_or_last_admin(admin):
+def test_no_puede_modificar_su_cuenta_ni_al_ultimo_admin(admin):
     """No se puede dar de baja, cambiar matrícula ni quitar la administración de la propia cuenta."""
     me = [u for u in admin.get("/api/usuarios?q=ADM001").get_json() if u["matricula"] == "ADM001"][0]
-    r = admin.post(f"/api/usuarios/{me['id_usuario']}/toggle")
+    r = admin.post(f"/api/usuarios/{me['id_usuario']}/estado")
     assert r.status_code == 400
     body = {k: me[k] for k in ("matricula", "nombre_completo", "correo", "estado", "fuente_validacion")}
     assert admin.put(f"/api/usuarios/{me['id_usuario']}", json={**body, "rol": "alumno"}).status_code == 400
@@ -58,7 +58,7 @@ def test_cannot_touch_own_account_or_last_admin(admin):
     assert admin.put(f"/api/usuarios/{me['id_usuario']}", json={**body, "rol": "admin"}).status_code == 200
 
 
-def test_last_admin_protected(app, admin):
+def test_ultimo_admin_protegido(app, admin):
     """Con 2 admins activos se puede bajar uno; el ultimo ya no (lo hace otro admin inexistente: se simula en BD)."""
     p = user_payload(rol="admin")
     a2 = admin.post("/api/usuarios", json=p).get_json()
@@ -71,24 +71,24 @@ def test_last_admin_protected(app, admin):
         assert model.count_active_admins() >= 1
 
 
-def test_toggle_blocked_with_loans_and_fines(admin):
+def test_cambio_de_estado_bloqueado_con_prestamos_y_multas(admin):
     """No se da de baja una cuenta con préstamos abiertos o multas pendientes."""
     p = user_payload()
     u = admin.post("/api/usuarios", json=p).get_json()
     lib = admin.post("/api/libros", json=libro_payload()).get_json()
     pr = make_loan(u["id_usuario"], lib["id_libro"])
     assert admin.get(f"/api/usuarios/{u['id_usuario']}").get_json()["prestamos_activos"] == 1
-    r = admin.post(f"/api/usuarios/{u['id_usuario']}/toggle")
+    r = admin.post(f"/api/usuarios/{u['id_usuario']}/estado")
     assert r.status_code == 400 and "préstamos" in r.get_json()["error"]
     sql("UPDATE prestamo SET estado='devuelto', fecha_devolucion=now() WHERE id_prestamo=%s", (pr,))
     sql("INSERT INTO adeudo(id_prestamo,tipo,dias_retraso,monto) VALUES (%s,'retraso',2,10.50)", (pr,))
     got = admin.get(f"/api/usuarios/{u['id_usuario']}").get_json()
     assert got["adeudos_pendientes"] == 10.5
-    assert admin.post(f"/api/usuarios/{u['id_usuario']}/toggle").status_code == 400
+    assert admin.post(f"/api/usuarios/{u['id_usuario']}/estado").status_code == 400
     sql("UPDATE adeudo SET estado='pagado' WHERE id_prestamo=%s", (pr,))
-    r = admin.post(f"/api/usuarios/{u['id_usuario']}/toggle")
+    r = admin.post(f"/api/usuarios/{u['id_usuario']}/estado")
     assert r.status_code == 200
     j = r.get_json()
     assert j["estado"] == "inactivo" and j["registro_vigente"] is False and j["fecha_baja"]
-    j = admin.post(f"/api/usuarios/{u['id_usuario']}/toggle").get_json()
+    j = admin.post(f"/api/usuarios/{u['id_usuario']}/estado").get_json()
     assert j["estado"] == "activo" and j["registro_vigente"] is True and j["fecha_baja"] is None

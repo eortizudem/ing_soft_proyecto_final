@@ -140,7 +140,7 @@ export const cancelFineForm = (a) => page({
   })}`,
 });
 
-// Amount summary shown before confirming a loss/damage report.
+// Resumen del monto que se muestra antes de confirmar un reporte de pérdida o daño.
 /**
  * Resumen de montos mostrado antes de confirmar pérdida o daño.
  * @param {Object} p - Previsualización (`usuario`, `libro`, `numero_copia`, `fecha_vencimiento`, `monto_retraso`, `dias_retraso`, `reposicion`).

@@ -26,14 +26,14 @@ async function show(params, ctx) {
     $$('input', box).forEach((i) => { i.disabled = true; }); // se redibuja con el estado real al terminar
     try {
       data = await model.setPermission(input.dataset.rol, input.dataset.permiso, input.checked);
-      await session.load(); // own permissions may have changed
+      await session.load(); // los permisos propios pudieron cambiar
       layout.renderNav();
       toast('Permisos actualizados.');
       if (!session.can('perfiles')) return dispatch();
     } catch (err) {
       showError(err);
     }
-    box.innerHTML = view.matrix(data, editable); // reflects the server state either way
+    box.innerHTML = view.matrix(data, editable); // refleja el estado del servidor en cualquier caso
   });
 }
 

@@ -1,7 +1,7 @@
 /** @module modules/usuarios/controller — rutas hash del módulo de usuarios; orquesta modelo y vista */
 import { label, onAction, bindForm, bindFileToText } from '/js/components/index.js';
 import { $ } from '/js/core/ui.js';
-import { listPage, editPage, bindToggle } from '/js/core/crud.js';
+import { listPage, editPage, bindAlternar } from '/js/core/crud.js';
 import * as model from './model.js';
 import * as view from './view.js';
 
@@ -57,13 +57,13 @@ async function detail(params, ctx) {
   const main = ctx.render(view.detail(user, model.roleMap(roles), hist));
   if (!main) return;
   const active = user.estado === 'activo';
-  bindToggle(main, {
+  bindAlternar(main, {
     confirm: () => ({
       title: active ? 'Confirmar baja' : 'Reactivar cuenta',
       message: `La cuenta de ${user.nombre_completo} ${active ? 'dejará de estar activa.' : 'volverá a estar activa.'}`,
       confirmLabel: active ? 'Confirmar baja' : 'Reactivar',
     }),
-    run: () => model.toggle(user.id_usuario),
+    run: () => model.alternar(user.id_usuario),
     success: (updated) => `Cuenta actualizada: ${label('estadoUsuario', updated.estado)}.`,
     refresh: () => detail(params, ctx),
   });

@@ -27,11 +27,11 @@ export function register(list) {
     const re = new RegExp('^' + route.path.replace(/:\w+/g, '([^/]+)') + '$');
     routes.push({ ...route, keys, re });
   }
-  // Literal paths win over parametrised ones ('movil/asistente' before 'movil/:id'); stable otherwise.
+  // Las rutas literales ganan a las parametrizadas ('movil/asistente' antes que 'movil/:id'); el resto conserva su orden.
   routes.sort((a, b) => a.keys.length - b.keys.length);
 }
 
-/** True when some module registered a route matching `path` (menu entries hide missing modules). */
+/** Indica si algún módulo registró una ruta que coincide con `path` (el menú oculta los módulos ausentes). */
 export const hasRoute = (path) => routes.some((r) => r.re.test(path));
 
 /**
@@ -83,7 +83,7 @@ export function init(h) {
 export async function dispatch() {
   if (!session.get()) return;
   const mine = ++token;
-  // "#/libros/nuevo?id_detalle=3": the path is matched without the query; handlers read it from ctx.query.
+  // "#/libros/nuevo?id_detalle=3": la ruta se compara sin la query; los manejadores la leen de ctx.query.
   const [rawPath, search = ''] = location.hash.replace(/^#\/?/, '').split('?');
   const path = decodeURIComponent(rawPath) || 'inicio';
   const ctx = {

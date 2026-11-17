@@ -68,10 +68,10 @@ def actualizar(id_libro):
     return service.actualizar(id_libro, body(), current_user())
 
 
-@bp.post("/api/libros/<int:id_libro>/toggle")
+@bp.post("/api/libros/<int:id_libro>/estado")
 @permission_required("catalogo")
-def toggle(id_libro):
-    """POST /api/libros/<id_libro>/toggle — activa/inactiva el libro (RF-11). Permiso: `catalogo`.
+def alternar(id_libro):
+    """POST /api/libros/<id_libro>/estado — activa/inactiva el libro (RF-11). Permiso: `catalogo`.
 
     Respuesta: libro actualizado. Errores: 400 si hay préstamos activos, 404.
     """

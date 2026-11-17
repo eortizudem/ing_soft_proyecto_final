@@ -38,7 +38,7 @@ let handlers = {};
  */
 export function init(h) {
   handlers = h;
-  // The skip link would change the hash and trigger the router: focus main instead.
+  // El enlace de salto cambiaría el hash y activaría el router: en su lugar se enfoca el contenido principal.
   $('.skip').addEventListener('click', (event) => {
     event.preventDefault();
     $('#main')?.focus();

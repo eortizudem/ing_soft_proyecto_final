@@ -1,5 +1,5 @@
-"""Acceso a datos generico y seguro: SQL dinamico con psycopg.sql (identificadores validados, valores siempre
-como parametros). Los nombres de tablas/columnas vienen del codigo, jamas de la peticion.
+"""Acceso a datos genérico y seguro: SQL dinámico con psycopg.sql (identificadores validados, valores siempre
+como parámetros). Los nombres de tablas/columnas vienen del código, jamás de la petición.
 
     row = repo.insert("libro", {"clave": "X1", ...}, returning="id_libro")
     rows = repo.select(BASE_SQL, {"estado": "activo"}, search=(q, ["v.titulo", "v.autor"]), order="v.clave")
@@ -9,7 +9,7 @@ import re
 from psycopg import sql
 
 from . import db
-from .errors import ApiError
+from .excepciones import ApiError
 
 fetch_one = db.fetchone
 fetch_all = db.fetchall
@@ -22,7 +22,7 @@ _columns_cache = {}
 
 
 def ident(name):
-    """Identifier seguro ('tabla' o 'alias.columna'); lanza ValueError si el nombre no es valido."""
+    """Identifier seguro ('tabla' o 'alias.columna'); lanza ValueError si el nombre no es válido."""
     parts = str(name).split(".")
     if len(parts) > 2 or not all(_IDENT.match(p) for p in parts):
         raise ValueError(f"Identificador no permitido: {name!r}")
@@ -30,7 +30,7 @@ def ident(name):
 
 
 def table_columns(table):
-    """Columnas reales de `table` (information_schema, en cache): es la lista blanca de insert/update."""
+    """Columnas reales de `table` (information_schema, en caché): es la lista blanca de insert/update."""
     cols = _columns_cache.get(table)
     if cols is None:
         ident(table)
@@ -51,7 +51,7 @@ def _check_columns(table, names):
 
 
 def _returning(returning):
-    """Fragmento ` RETURNING ...` a partir de None/'*'/columna/lista de columnas (vacio si falsy)."""
+    """Fragmento ` RETURNING ...` a partir de None/'*'/columna/lista de columnas (vacío si falsy)."""
     if not returning:
         return sql.SQL("")
     cols = sql.SQL("*") if returning == "*" else sql.SQL(", ").join(
@@ -74,7 +74,7 @@ def get_or_404(table, pk_col, id_, message="No se encontró el registro."):
 
 
 def insert(table, data, returning="*"):
-    """INSERT dinamico; `data` = {columna: valor}. Devuelve la fila RETURNING (dict) o None."""
+    """INSERT dinámico; `data` = {columna: valor}. Devuelve la fila RETURNING (dict) o None."""
     _check_columns(table, data)
     if data:
         q = sql.SQL("INSERT INTO {} ({}) VALUES ({})").format(
@@ -85,7 +85,7 @@ def insert(table, data, returning="*"):
 
 
 def update(table, pk_col, id_, data, returning="*"):
-    """UPDATE dinamico por clave primaria; solo toca las columnas de `data` (None -> NULL)."""
+    """UPDATE dinámico por clave primaria; solo toca las columnas de `data` (None -> NULL)."""
     if not data:
         raise ValueError("update() requiere al menos una columna.")
     _check_columns(table, [pk_col, *data])
@@ -112,7 +112,7 @@ def build_where(filters=None, search=None):
     """Condiciones AND -> (Composed, params). Ignora filtros None/''.
 
     filters: {col: valor} igualdad; lista -> ANY; sufijos __gt __gte __lt __lte __ne ("v.disponibles__gt": 0).
-    search: (texto, [columnas]) busqueda sin acentos ni mayusculas (unaccent ILIKE) sobre varias columnas.
+    search: (texto, [columnas]) búsqueda sin acentos ni mayúsculas (unaccent ILIKE) sobre varias columnas.
     """
     parts, params = [], []
     for key, value in (filters or {}).items():
@@ -143,7 +143,7 @@ def build_where(filters=None, search=None):
 
 
 def _order_by(order):
-    """Fragmento ` ORDER BY` validado con `_ORDER` (columna [ASC|DESC]); ValueError si algun item no es valido."""
+    """Fragmento ` ORDER BY` validado con `_ORDER` (columna [ASC|DESC]); ValueError si algún item no es válido."""
     if not order:
         return sql.SQL("")
     items = []
@@ -160,12 +160,12 @@ MAX_LISTADO = 2000
 
 
 def tope(limite):
-    """`limite` pedido por el cliente acotado a 1..MAX_LISTADO (valor invalido o vacio -> LIMITE_LISTADO)."""
+    """`limite` pedido por el cliente acotado a 1..MAX_LISTADO (valor inválido o vacío -> LIMITE_LISTADO)."""
     return min(max(limite, 1), MAX_LISTADO) if isinstance(limite, int) and limite else LIMITE_LISTADO
 
 
 def select(base, filters=None, search=None, order=None, limit=None):
-    """Lista filas: `base` (SELECT estatico del modelo) + WHERE de build_where + ORDER BY validado (+ LIMIT)."""
+    """Lista filas: `base` (SELECT estático del modelo) + WHERE de build_where + ORDER BY validado (+ LIMIT)."""
     where, params = build_where(filters, search)
     q = sql.SQL("{} WHERE {}").format(sql.SQL(base), where) + _order_by(order)
     if limit:
@@ -174,9 +174,9 @@ def select(base, filters=None, search=None, order=None, limit=None):
 
 
 def exists(table, where, exclude=None, ci=(), any_of=False):
-    """¿Hay filas con `where` ({col: valor}, AND; OR con any_of)? `ci`: columnas sin distinguir mayusculas.
+    """¿Hay filas con `where` ({col: valor}, AND; OR con any_of)? `ci`: columnas sin distinguir mayúsculas.
 
-    exclude=(pk_col, id) ignora esa fila (util al editar).
+    exclude=(pk_col, id) ignora esa fila (útil al editar).
     """
     _check_columns(table, [*where, *ci, *([exclude[0]] if exclude else [])])
     conds = [sql.SQL("lower({}) = lower(%s)" if c in ci else "{} = %s").format(ident(c)) for c in where]
@@ -190,7 +190,7 @@ def exists(table, where, exclude=None, ci=(), any_of=False):
 
 
 def count(table, where=None):
-    """Numero de filas de `table` que cumplen `where` ({col: valor}; None/'' se ignoran)."""
+    """Número de filas de `table` que cumplen `where` ({col: valor}; None/'' se ignoran)."""
     _check_columns(table, [k.partition("__")[0] for k in (where or {})])
     cond, params = build_where(where)
     q = sql.SQL("SELECT count(*)::int AS n FROM {} WHERE {}").format(ident(table), cond)

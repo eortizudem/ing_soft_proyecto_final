@@ -1,7 +1,7 @@
 """Servicio de `perfiles` (capa service MVC): consulta y edición de la matriz de permisos por perfil (RF-02)."""
 
 from app.core.bitacora import audit
-from app.core.errors import ApiError
+from app.core.excepciones import ApiError
 from app.core.validators import Bool, validate
 
 from . import model

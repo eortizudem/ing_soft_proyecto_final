@@ -13,14 +13,15 @@ resultado del servicio). Los modulos nuevos (prestamos, asistente) deben seguir 
 | `serializers.py` | `to_json(x)`, `nest(row, key, fields)`, `JSONProvider` | date/datetime -> ISO, Decimal -> float; los controladores devuelven dicts/listas/filas directo |
 | `validators.py` | `validate(data, schema, partial=False)`, `Str Email Int Dec Enum Bool Date List` | Validacion declarativa con mensajes en espanol |
 | `repo.py` | `fetch_one/fetch_all/execute`, `select`, `build_where`, `get_or_404`, `or_404`, `insert`, `update`, `exists`, `count`, `get_or_create`, `tope` (limite de listados: `select(..., limit=repo.tope(n))`, 500 por defecto, max 2000) | SQL dinamico seguro (`psycopg.sql`) |
-| `estado.py` | `toggle_estado(table, pk, id, load=, guard=, extra=)` | Activar/desactivar con guardas |
+| `estado.py` | `alternar_estado(table, pk, id, load=, guard=, extra=)` | Activar/desactivar con guardas |
 | `bitacora.py` | `log(id_usuario, accion, detalle)`, `@audit(accion, detail)` | Bitacora |
 | `auth.py` | `@login_required`, `@permission_required("p")`, `require_permission("p", user)`, `has_permission`, `current_user` | Acceso |
-| `errors.py` | `ApiError(mensaje, status=400, extra=None)`, `ApiError.reglas(motivos)`, `motivo(codigo, msg)`, `exigir(motivos)` | Errores de negocio -> `{"error", **extra}`; reglas incumplidas -> 422 `{"error", "motivos":[{codigo, mensaje}]}` |
+| `excepciones.py` | `ApiError(mensaje, status=400, extra=None)`, `ApiError.reglas(motivos)`, `motivo(codigo, msg)`, `exigir(motivos)` | Errores de negocio -> `{"error", **extra}`; reglas incumplidas -> 422 `{"error", "motivos":[{codigo, mensaje}]}` |
 | `calendario.py` | `es_habil`, `sumar_habiles(desde, n)`, `habiles_entre(desde, hasta)` | Dias habiles lun-vie (D-03); `habiles_entre(d, sumar_habiles(d, n)) == n` |
 | `parametros.py` | `tipo_cambio()`, `presupuesto_mensual()`, `dias_reserva_espera()` | Parametros de entorno (`config.py`): `TIPO_CAMBIO_USD_MXN`, `PRESUPUESTO_MENSUAL_USD`, `ESPERA_DIAS_RESERVA` |
-| `errores.py` | `registrar(origen, resumen, id_usuario)`, `dentro_del_limite(cliente)`, `parsear` | Bitacora de errores (accion `error_sistema`, PS-S3-06): 500 del servidor y errores JS; conexion propia, nunca lanza |
+| `bitacora_errores.py` | `registrar(origen, resumen, id_usuario)`, `dentro_del_limite(cliente)`, `parsear` | Bitacora de errores (accion `error_sistema`, PS-S3-06): 500 del servidor y errores JS; conexion propia, nunca lanza |
 | `notificaciones.py` | `enviar(canal, asunto, cuerpo, id_usuario, destino=None)`, `enviar_a_usuario`, `validar_canales`, `parsear`, `CANALES` | lista de avisos simulada en `bitacora` (`notif_<canal>`, D-11) |
+| `ia.py` | `disponible()`, `chat(sistema, mensajes)`, `limpiar(texto)`, `habilitada()`, `modelo()`, `IAError` | Cliente de Ollama (solo `urllib`) para el asistente: configuración `ASISTENTE_IA`, `OLLAMA_URL`, `OLLAMA_MODEL`, `OLLAMA_TIMEOUT`; siempre con plan B por reglas (estándar 3.11) |
 | `circulacion.py` | ver abajo | Reglas unicas de prestamo/renovacion/multa/reposicion (RN-01..06, D-24) |
 | `app/testing.py` + `conftest.py` | `login`, `client_as`, `make_user`, `make_book`, `make_loan`, `user_payload`, `libro_payload`, fixtures `anon admin alumno alumno2 catalogo comprador bibliotecario docente colaborador login_as` | Pruebas |
 
@@ -98,7 +99,7 @@ vienen **solo del codigo**, nunca de la peticion.
 @audit(lambda u: "usuario_baja" if u["estado"] == "inactivo" else "usuario_reactivar",
        lambda u: f"Cambio de estado de {u['matricula']}")        # detail(resultado) o detail(resultado, args)
 def alternar(id_usuario, actor):                                  # el argumento se llama `actor`
-    toggle_estado("usuario", "id_usuario", id_usuario, load=obtener,
+    alternar_estado("usuario", "id_usuario", id_usuario, load=obtener,
                   guard=lambda fila, nuevo: ...,                  # lanza ApiError para impedirlo
                   extra={"inactivo": {"fecha_baja": date.today()}, "activo": {"fecha_baja": None}})
     return model.get(id_usuario)
@@ -109,7 +110,7 @@ el actor no es un argumento (login, recuperar contrasena, reportes).
 **Modulo nuevo**: `app/modules/<m>/__init__.py` = `bp = make_blueprint(__name__)`; crea `model.py`, `service.py`,
 `controller.py` (con `from . import bp`) y `tests/test_<m>.py`. No hay que registrar nada.
 
-**Pruebas**: `make_user(rol="alumno")`, `make_book(ejemplares=2)` insertan directo en BD (se limpian al final de la
+**Pruebas**: `make_user(rol="alumno")`, `make_book(ejemplares=2)` (en `app/testing.py`) insertan directo en BD (se limpian al final de la
 sesion); `login_as("ADM001", "Admin123")` o los fixtures `admin`, `alumno`, `alumno2`, `catalogo`, `comprador`, `bibliotecario`, `docente`, `colaborador`, `anon`.
 `make_loan(id_usuario, id_libro)` crea un prestamo activo (vence en 7 dias naturales; ajusta `fecha_vencimiento` con SQL para casos vencidos). `conftest.py` borra al final de la sesion lo creado en `mensaje, conversacion, lista_espera, adeudo, renovacion, prestamo, ...`.
 Tests de funciones que usan la BD fuera de una peticion: `with app.app_context():` y `db.get_conn().commit()` si deben persistir.
@@ -119,3 +120,4 @@ Pruebas del core en `app/core/tests/`; ejecutar con `docker compose exec -T web 
 `espera.notificar_espera(id_libro)` (reservado D-19 + aviso; lo llaman prestamos, adeudos y el barrido de espera),
 `consultas` (fragmentos SQL `disponibles`, `prestamos_abiertos`, `prestamos_vencidos`, `adeudos_*`; busquedas
 `usuario_por_matricula`, `libro_por_clave`) y `serializers.texto_ubicacion`. "Prestamo abierto" = `fecha_devolucion IS NULL`.
+

@@ -77,11 +77,11 @@ def prestamos_abiertos(id_usuario):
         id_usuario (int): usuario consultado.
 
     Returns:
-        list[dict]: `titulo`, `fecha_vencimiento`, `num_renovaciones`, `max_renovaciones`, `multa_diaria`,
+        list[dict]: `id_prestamo`, `titulo`, `fecha_vencimiento`, `num_renovaciones`, `max_renovaciones`, `multa_diaria`,
         ordenados por vencimiento.
     """
     return repo.fetch_all(
-        """SELECT l.titulo, p.fecha_vencimiento, p.num_renovaciones, po.max_renovaciones, po.multa_diaria
+        """SELECT p.id_prestamo, l.titulo, p.fecha_vencimiento, p.num_renovaciones, po.max_renovaciones, po.multa_diaria
            FROM prestamo p JOIN ejemplar e ON e.id_ejemplar = p.id_ejemplar JOIN libro l ON l.id_libro = e.id_libro
            JOIN politica_prestamo po ON po.id_politica = p.id_politica
            WHERE p.id_usuario = %s AND p.fecha_devolucion IS NULL ORDER BY p.fecha_vencimiento""", (id_usuario,))
@@ -100,6 +100,20 @@ def adeudos_pendientes(id_usuario):
         """SELECT a.tipo, a.monto, l.titulo FROM adeudo a JOIN prestamo p ON p.id_prestamo = a.id_prestamo
            JOIN ejemplar e ON e.id_ejemplar = p.id_ejemplar JOIN libro l ON l.id_libro = e.id_libro
            WHERE p.id_usuario = %s AND a.estado = 'pendiente' ORDER BY a.id_adeudo""", (id_usuario,))
+
+
+def espera_usuario(id_usuario):
+    """Entradas activas del usuario en la lista de espera (RF-31; contexto de la IA).
+
+    Args:
+        id_usuario (int): usuario consultado.
+
+    Returns:
+        list[dict]: `titulo`, `posicion`, `estado` (`en_espera` o `notificado`), ordenadas por fecha de solicitud.
+    """
+    return repo.fetch_all(
+        """SELECT l.titulo, w.posicion, w.estado FROM lista_espera w JOIN libro l ON l.id_libro = w.id_libro
+           WHERE w.id_usuario = %s AND w.estado IN ('en_espera','notificado') ORDER BY w.fecha_solicitud""", (id_usuario,))
 
 
 # ---- conversaciones ----
@@ -164,10 +178,11 @@ def ultima_intencion_asistente(id_conversacion):
         id_conversacion (int): conversacion consultada.
 
     Returns:
-        str | None: nombre de la intencion o `None` si el asistente aun no ha respondido.
+        str | None: nombre de la intencion o `None` si el asistente aun no ha respondido o su ultimo mensaje no tiene
+        intencion (respuesta de la IA a algo que las reglas no reconocieron, o respuesta manual del bibliotecario).
     """
     r = repo.fetch_one(
-        """SELECT i.nombre FROM mensaje m JOIN intencion i ON i.id_intencion = m.id_intencion
+        """SELECT i.nombre FROM mensaje m LEFT JOIN intencion i ON i.id_intencion = m.id_intencion
            WHERE m.id_conversacion = %s AND m.emisor = 'asistente' ORDER BY m.id_mensaje DESC LIMIT 1""",
         (id_conversacion,))
     return r["nombre"] if r else None

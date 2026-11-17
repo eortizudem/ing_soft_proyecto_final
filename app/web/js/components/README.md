@@ -26,10 +26,10 @@ Las clases CSS son las canónicas de `css/components.css`; no hay estilos en lí
 | `notice.js`, `empty.js` | `notice`, `emptyState` |
 | `modal.js` | `confirmAction` |
 | `meter.js` | `meter` |
-| `chat.js` | `chatBubble`, `chatPanel`, `appendChat`, `bindChat` |
+| `chat.js` | `chatBubble`, `chatPanel`, `appendChat`, `chatTyping`, `bindChat` |
 | `format.js` | `money(n, currency)`, `usd`, `number`, `date`, `today`, `datetime`, `location`, `person`, `book`, `count(n, noun, limit)` (con `LIST_LIMIT` de `core/api.js` avisa que el listado esta acotado) |
 | `labels.js` | `LABELS`, `TONES`, `label`, `labelItems`, `tone`, `roleName` |
-| `../core/crud.js` | `listPage`, `editPage`, `bindToggle` |
+| `../core/crud.js` | `listPage`, `editPage`, `bindAlternar` |
 
 ## Ejemplos
 
@@ -73,8 +73,8 @@ Tipos: `text email number password search select textarea checkbox`. Los campos 
 ```js
 detailView({ title, sub, badge: statusBadge('prestamo', p.estado),
   items: [['Usuario', p.usuario], ['Vence', date(p.vence)]],
-  actions: [btn({ label: 'Dar de baja', action: 'toggle', variant: 'danger' }), btn({ label: 'Volver', href: 'x', variant: 'link' })] });
-bindToggle(main, { confirm: () => ({ title, message, confirmLabel }), run: () => model.toggle(id),
+  actions: [btn({ label: 'Dar de baja', action: 'alternar', variant: 'danger' }), btn({ label: 'Volver', href: 'x', variant: 'link' })] });
+bindAlternar(main, { confirm: () => ({ title, message, confirmLabel }), run: () => model.alternar(id),
                    success: () => 'Actualizado.', refresh: () => detail(params, ctx) });
 ```
 `confirmAction({title, message, confirmLabel})` devuelve `Promise<boolean>`. `onAction(root, {nombre: handler})`
@@ -99,10 +99,12 @@ chatPanel({ id: 'chat', messages: items.map(chatBubble) });
 // controller.js
 bindChat($('#chat', main), { send: async (texto) => {
   appendChat('chat', chatBubble({ emisor: 'usuario', texto }));
-  const r = await model.send(texto);                       // POST /api/asistente/mensajes
-  appendChat('chat', chatBubble({ emisor: 'asistente', texto: r.respuesta.texto }));
+  const quitar = chatTyping('chat');                       // "Escribiendo…" (aria-live) mientras responde
+  const r = await model.send(texto).finally(quitar);       // POST /api/asistente/mensajes
+  appendChat('chat', chatBubble({ emisor: 'asistente', texto: r.respuesta.texto, nota: 'Respuesta con IA' }));
 } });
 ```
+`chatBubble({ nota })` añade una línea pequeña al final del mensaje; `chatTyping(panelId, root?, texto?)` devuelve la función que quita el indicador.
 
 **Etiquetas disponibles** (no editar `labels.js` desde un paquete): `estadoUsuario estadoLibro fuente tipoUso(+reservado)
 solicitud(+recibida) disponibilidad prestamo adeudo adeudoTipo listaEspera motivoBaja canal canalChat emisor consulta`.

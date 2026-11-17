@@ -1,4 +1,4 @@
-"""Pruebas de ayudas varias del core: serializadores, http, blueprints, permisos, `toggle_estado` y `@audit`."""
+"""Pruebas de ayudas varias del core: serializadores, http, blueprints, permisos, `alternar_estado` y `@audit`."""
 from datetime import date, datetime
 from decimal import Decimal
 
@@ -7,8 +7,8 @@ from flask import Flask
 
 from app.core import auth, http
 from app.core.bitacora import audit
-from app.core.errors import ApiError
-from app.core.estado import toggle_estado
+from app.core.excepciones import ApiError
+from app.core.estado import alternar_estado
 from app.core.module import make_blueprint
 from app.core.serializers import JSONProvider, nest, to_json
 from app.testing import make_user, sql
@@ -16,7 +16,7 @@ from app.testing import make_user, sql
 
 # ---- serializers ----
 
-def test_to_json_recursive():
+def test_a_json_recursivo():
     """`to_json` convierte fechas y Decimal dentro de estructuras anidadas."""
     row = {"d": date(2026, 1, 2), "t": datetime(2026, 1, 2, 3, 4, 5), "m": Decimal("10.50"),
            "l": [{"x": Decimal(1)}, (date(2020, 2, 2),)], "s": "a", "n": None, "b": True}
@@ -25,7 +25,7 @@ def test_to_json_recursive():
     assert to_json([row])[0]["m"] == 10.5 and to_json(None) is None
 
 
-def test_nest():
+def test_anidar():
     """`nest` mueve campos a un sub-diccionario sin mutar la fila original y respeta None."""
     assert nest({"a": 1, "x": 2, "y": 3}, "sub", ("x", "y")) == {"a": 1, "sub": {"x": 2, "y": 3}}
     assert nest(None, "sub", ("x",)) is None
@@ -70,14 +70,14 @@ def _mini_app():
     return app
 
 
-def test_json_provider_returns_rows_directly():
+def test_proveedor_json_devuelve_filas_directo():
     """Las vistas devuelven filas con date/Decimal y salen serializadas, sin escapar caracteres no ASCII."""
     r = _mini_app().test_client().get("/rows")
     assert r.get_json() == [{"d": "2026-01-02", "m": 2.5, "ñ": "á"}]
     assert "á" in r.get_data(as_text=True)  # ensure_ascii desactivado
 
 
-def test_http_body_ok_created_query():
+def test_http_cuerpo_ok_creado_y_consulta():
     """`body`, `ok`, `created` y `query_args` se comportan segun su contrato (strict, extra, tipado)."""
     c = _mini_app().test_client()
     r = c.post("/echo", json={"a": 1})
@@ -94,7 +94,7 @@ def test_http_body_ok_created_query():
     assert c.get("/q?n=zz").get_json()["n"] == 5
 
 
-def test_make_blueprint_name_and_static():
+def test_make_blueprint_nombre_y_estatico():
     """`make_blueprint` nombra el blueprint por el modulo y sirve estaticos en /m/<modulo>."""
     bp = make_blueprint("app.modules.demo")
     assert bp.name == "demo" and bp.url_prefix is None and bp.static_url_path == "/m/demo"
@@ -102,7 +102,7 @@ def test_make_blueprint_name_and_static():
 
 # ---- auth helpers ----
 
-def test_require_permission(app):
+def test_exigir_permiso(app):
     """`require_permission` lanza 403 sin el permiso y devuelve el usuario si lo tiene."""
     with app.test_request_context():
         with pytest.raises(ApiError) as e:
@@ -111,10 +111,10 @@ def test_require_permission(app):
         assert auth.require_permission("x", {"permisos": ["x"]}) == {"permisos": ["x"]}
 
 
-# ---- toggle_estado ----
+# ---- alternar_estado ----
 
-def test_toggle_estado_guard_extra_and_result(app):
-    """`toggle_estado` alterna el estado, aplica columnas extra, respeta la guarda y lanza 404 si no existe."""
+def test_alternar_estado_guard_extra_and_result(app):
+    """`alternar_estado` alterna el estado, aplica columnas extra, respeta la guarda y lanza 404 si no existe."""
     u = make_user()
     seen = []
 
@@ -129,29 +129,29 @@ def test_toggle_estado_guard_extra_and_result(app):
 
     extra = {"inactivo": {"registro_vigente": False}, "activo": {"registro_vigente": True}}
     with app.app_context():
-        row, nuevo = toggle_estado("usuario", "id_usuario", u["id_usuario"], load=load, guard=guard, extra=extra)
+        row, nuevo = alternar_estado("usuario", "id_usuario", u["id_usuario"], load=load, guard=guard, extra=extra)
         assert (row["estado"], nuevo) == ("activo", "inactivo")
         now = load(u["id_usuario"])
         assert now["estado"] == "inactivo" and now["registro_vigente"] is False
-        _, nuevo = toggle_estado("usuario", "id_usuario", u["id_usuario"], load=load, guard=guard, extra=extra)
+        _, nuevo = alternar_estado("usuario", "id_usuario", u["id_usuario"], load=load, guard=guard, extra=extra)
         assert nuevo == "activo" and load(u["id_usuario"])["registro_vigente"] is True
         assert seen == [("activo", "inactivo"), ("inactivo", "activo")]
         with pytest.raises(ApiError) as e:
-            toggle_estado("usuario", "id_usuario", -9, load=load)
+            alternar_estado("usuario", "id_usuario", -9, load=load)
         assert e.value.status == 404
 
         def deny(row, nuevo):
             raise ApiError("Bloqueado.")
 
         with pytest.raises(ApiError):
-            toggle_estado("usuario", "id_usuario", u["id_usuario"], load=load, guard=deny)
+            alternar_estado("usuario", "id_usuario", u["id_usuario"], load=load, guard=deny)
         assert load(u["id_usuario"])["estado"] == "activo"  # la guarda impide el cambio
         # no hay commit en este contexto: se revierte con el teardown de la app
 
 
 # ---- audit ----
 
-def test_audit_logs_only_on_success(app):
+def test_auditoria_solo_registra_si_hay_exito(app):
     """`@audit` registra en bitacora solo si la funcion termina sin error y hay actor con id."""
     admin_id = sql("SELECT id_usuario FROM usuario WHERE matricula='ADM001'")[0]["id_usuario"]
     actor = {"id_usuario": admin_id}

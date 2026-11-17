@@ -1,10 +1,10 @@
-"""Fixtures globales de pytest: app, limpieza de datos de la sesion y clientes autenticados por rol semilla."""
+"""Fixtures globales de pytest: app, limpieza de datos de la sesión y clientes autenticados por rol semilla."""
 import pytest
 
 from app import create_app
 from app.testing import client_as, sql
 
-# Orden de borrado respetando FKs; solo se eliminan filas creadas durante la sesion de pruebas.
+# Orden de borrado respetando FKs; solo se eliminan filas creadas durante la sesión de pruebas.
 _TABLAS = [("mensaje", "id_mensaje"), ("conversacion", "id_conversacion"), ("lista_espera", "id_espera"),
            ("adeudo", "id_adeudo"), ("renovacion", "id_renovacion"), ("prestamo", "id_prestamo"),
            ("detalle_solicitud", "id_detalle"), ("solicitud_compra", "id_solicitud"), ("ejemplar", "id_ejemplar"),
@@ -14,28 +14,34 @@ _TABLAS = [("mensaje", "id_mensaje"), ("conversacion", "id_conversacion"), ("lis
 
 @pytest.fixture(scope="session")
 def app():
-    """Aplicacion Flask unica para toda la sesion de pruebas."""
+    """Aplicación Flask única para toda la sesión de pruebas."""
     return create_app()
 
 
 @pytest.fixture(scope="session", autouse=True)
 def limpiar_datos(app):
-    """Al terminar la sesion borra las filas creadas por las pruebas (id mayor al maximo previo en cada tabla)."""
+    """Al terminar la sesión borra las filas creadas por las pruebas (id mayor al máximo previo en cada tabla)."""
     snap = {t: sql(f"SELECT COALESCE(max({pk}),0) AS m FROM {t}")[0]["m"] for t, pk in _TABLAS}
     yield
     for t, pk in _TABLAS:
         sql(f"DELETE FROM {t} WHERE {pk} > %s", (snap[t],))
 
 
+@pytest.fixture(autouse=True)
+def sin_ia(app, monkeypatch):
+    """Por defecto el asistente responde por reglas en todas las pruebas (no depende de Ollama); las de IA la activan con un cliente falso."""
+    monkeypatch.setitem(app.config, "ASISTENTE_IA", False)
+
+
 @pytest.fixture
 def anon(app):
-    """Cliente sin sesion iniciada."""
+    """Cliente sin sesión iniciada."""
     return app.test_client()
 
 
 @pytest.fixture
 def login_as(app):
-    """Fabrica de clientes autenticados: login_as("ADM001", "Admin123")."""
+    """Fábrica de clientes autenticados: login_as("ADM001", "Admin123")."""
     return lambda matricula, password: client_as(app, matricula, password)
 
 
@@ -49,7 +55,6 @@ def _cliente(nombre, matricula, password):
 
 
 admin = _cliente("admin", "ADM001", "Admin123")
-as_admin = _cliente("as_admin", "ADM001", "Admin123")
 alumno = _cliente("alumno", "A0512345", "Alumno123")
 catalogo = _cliente("catalogo", "CAT001", "Catalogo123")
 comprador = _cliente("comprador", "COM001", "Compras123")

@@ -1,6 +1,6 @@
-"""Calendario de dias habiles (D-03): habil = lunes a viernes; los festivos cuentan como habiles.
+"""Calendario de días hábiles (D-03): hábil = lunes a viernes; los festivos cuentan como hábiles.
 
-Funciones puras, sin acceso a BD. Convencion: el dia `desde` no se cuenta; el dia 1 es el siguiente dia habil.
+Funciones puras, sin acceso a BD. Convención: el día `desde` no se cuenta; el día 1 es el siguiente día hábil.
 Se cumple siempre `habiles_entre(d, sumar_habiles(d, n)) == n`.
 """
 from datetime import date, datetime, timedelta
@@ -17,10 +17,10 @@ def es_habil(d: date) -> bool:
 
 
 def sumar_habiles(desde: date, n: int) -> date:
-    """Fecha tras `n` dias habiles posteriores a `desde` (n >= 0; n=0 devuelve `desde`).
+    """Fecha tras `n` días hábiles posteriores a `desde` (n >= 0; n=0 devuelve `desde`).
 
-    Prestamo en viernes con 5 dias -> el viernes siguiente; prestamo en sabado/domingo cuenta desde el lunes
-    (el lunes es el dia 1).
+    Préstamo en viernes con 5 días -> el viernes siguiente; préstamo en sabado/domingo cuenta desde el lunes
+    (el lunes es el día 1).
     """
     if n < 0:
         raise ValueError("n debe ser >= 0")
@@ -33,7 +33,7 @@ def sumar_habiles(desde: date, n: int) -> date:
 
 
 def habiles_entre(desde: date, hasta: date) -> int:
-    """Dias habiles en el intervalo (desde, hasta]; 0 si hasta <= desde."""
+    """Días hábiles en el intervalo (desde, hasta]; 0 si hasta <= desde."""
     d, h = _d(desde), _d(hasta)
     if h <= d:
         return 0

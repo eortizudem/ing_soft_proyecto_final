@@ -21,10 +21,10 @@ Tipos de reporte (`TIPOS`), permisos y filtros:
 from datetime import date
 
 from app.core import circulacion, notificaciones
-from app.core import errores as errores_log
+from app.core import bitacora_errores as errores_log
 from app.core.auth import require_permission
 from app.core.bitacora import log
-from app.core.errors import ApiError
+from app.core.excepciones import ApiError
 from app.core.serializers import texto_ubicacion
 from app.core.validators import Date, Enum, Str, validate
 

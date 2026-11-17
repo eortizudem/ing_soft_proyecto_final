@@ -1,5 +1,5 @@
-"""Utilidades de prueba: acceso directo a la BD, clientes autenticados y fabricas de usuarios, libros y prestamos.
-No se usa en produccion; requiere `DATABASE_URL` en el entorno."""
+"""Utilidades de prueba: acceso directo a la BD, clientes autenticados y fábricas de usuarios, libros y préstamos.
+No se usa en producción; requiere `DATABASE_URL` en el entorno."""
 import os
 import uuid
 
@@ -14,7 +14,7 @@ def url():
 
 
 def sql(query, params=()):
-    """Ejecuta `query` con conexion propia en autocommit; devuelve filas (dict) o None si no produce resultados.
+    """Ejecuta `query` con conexión propia en autocommit; devuelve filas (dict) o None si no produce resultados.
 
     Al ser autocommit, lo escrito persiste (lo limpia el fixture `limpiar_datos` de conftest.py).
     """
@@ -24,7 +24,7 @@ def sql(query, params=()):
 
 
 def uniq(n=6):
-    """Sufijo aleatorio en mayusculas de `n` caracteres hexadecimales, para datos de prueba unicos."""
+    """Sufijo aleatorio en mayúsculas de `n` caracteres hexadecimales, para datos de prueba únicos."""
     return uuid.uuid4().hex[:n].upper()
 
 
@@ -42,7 +42,7 @@ def client_as(app, matricula, password):
 
 
 def user_payload(**over):
-    """Cuerpo valido para crear un usuario (alumno activo con datos unicos); `over` sobrescribe campos."""
+    """Cuerpo válido para crear un usuario (alumno activo con datos únicos); `over` sobrescribe campos."""
     s = uniq()
     d = {"matricula": f"T{uniq(9)}", "nombre_completo": f"Usuario Prueba {s}", "correo": f"t{s.lower()}@ducky.edu.mx",
          "rol": "alumno", "estado": "activo", "fuente_validacion": "manual", "password": "Prueba123"}
@@ -51,7 +51,7 @@ def user_payload(**over):
 
 
 def libro_payload(**over):
-    """Cuerpo valido para crear un libro prestable con 3 ejemplares y datos unicos; `over` sobrescribe campos."""
+    """Cuerpo válido para crear un libro prestable con 3 ejemplares y datos únicos; `over` sobrescribe campos."""
     s = uniq()
     d = {"clave": f"X{s}", "titulo": f"Libro de prueba {s}", "autor": "Autor Prueba", "editorial": "Editorial",
          "tema": "Pruebas", "anio_publicacion": 2020, "tipo_uso": "prestamo_externo", "clasificacion": "000 PRU",
@@ -62,7 +62,7 @@ def libro_payload(**over):
 
 
 def make_loan(id_usuario, id_libro):
-    """Crea un prestamo activo directamente en BD y marca el ejemplar prestado."""
+    """Crea un préstamo activo directamente en BD y marca el ejemplar prestado."""
     ej = sql("SELECT id_ejemplar FROM ejemplar WHERE id_libro=%s AND estado='disponible' ORDER BY numero_copia LIMIT 1",
              (id_libro,))[0]["id_ejemplar"]
     pol = sql("SELECT id_politica FROM politica_prestamo WHERE id_rol=(SELECT id_rol FROM usuario WHERE id_usuario=%s) LIMIT 1",
@@ -83,7 +83,7 @@ def make_user(**over):
 
 
 def make_book(**over):
-    """Inserta libro + ubicacion + ejemplares directo en BD. Devuelve la fila de libro."""
+    """Inserta libro + ubicación + ejemplares directo en BD. Devuelve la fila de libro."""
     p = libro_payload(**over)
     ub = sql("INSERT INTO ubicacion(planta,pasillo,librero,nivel) VALUES (%s,%s,%s,%s) RETURNING id_ubicacion",
              (p["planta"], p["pasillo"], f"{p['librero']:02d}", p["nivel"]))[0]["id_ubicacion"]

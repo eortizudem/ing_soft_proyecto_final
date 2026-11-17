@@ -34,21 +34,21 @@ def _p(**over):
     return d
 
 
-def test_permissions(alumno, anon):
+def test_permisos(alumno, anon):
     """Sin permiso `compras` 403; sin sesión 401."""
     assert alumno.get("/api/compras").status_code == 403
     assert alumno.post("/api/compras", json=_p()).status_code == 403
     assert anon.get("/api/compras").status_code == 401
 
 
-def test_seed_sol001(comprador):
+def test_semilla_sol001(comprador):
     """La solicitud semilla SOL001 tiene total, estado, detalles, solicitante y fecha esperados."""
     s = [x for x in comprador.get("/api/compras").get_json() if x["folio"] == "SOL001"][0]
     assert s["total_estimado"] == 2500 and s["estado"] == "pendiente" and len(s["detalles"]) == 2
     assert s["solicitante"] == "Responsable de compras" and s["fecha"] == "2026-10-14"
 
 
-def test_total_folio_and_book_match(comprador):
+def test_total_folio_y_libro_coinciden(comprador):
     """El total suma líneas, el folio es consecutivo y el título coincidente se enlaza con un libro."""
     a = comprador.post("/api/compras", json=_p())
     assert a.status_code == 201
@@ -63,7 +63,7 @@ def test_total_folio_and_book_match(comprador):
     assert comprador.get(f"/api/compras/{b['id_solicitud']}").get_json()["folio"] == b["folio"]
 
 
-def test_validation(comprador):
+def test_validaciones(comprador):
     """Justificación, detalles, cantidad, precio y descripción inválidos responden 400."""
     line = {"descripcion": "X", "cantidad": 1, "precio_unitario": 1}
     for bad in ({"justificacion": ""}, {"detalles": []}, {"detalles": [{**line, "cantidad": 0}]},

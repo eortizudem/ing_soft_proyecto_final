@@ -1,4 +1,4 @@
-"""Serializacion JSON: date/datetime -> ISO, Decimal -> float (recursivo) y proveedor JSON de Flask."""
+"""Serialización JSON: date/datetime -> ISO, Decimal -> float (recursivo) y proveedor JSON de Flask."""
 from datetime import date, datetime
 from decimal import Decimal
 
@@ -26,7 +26,7 @@ def to_json(value):
 
 
 def texto_ubicacion(u):
-    """Ubicacion fisica -> "Planta baja · Pasillo A · Librero 01 · Nivel 1" (espejo de `location` en format.js)."""
+    """Ubicación física -> "Planta baja · Pasillo A · Librero 01 · Nivel 1" (espejo de `location` en format.js)."""
     return f"{u['planta']} · Pasillo {u['pasillo']} · Librero {u['librero']} · Nivel {u['nivel']}" if u else ""
 
 

@@ -73,7 +73,7 @@ export function editPage(ctx, { markup, formId, save, message, redirect }) {
 }
 
 /**
- * Enlaza el botón [data-action="toggle"] (baja/reactivar): modal de confirmación -> run() ->
+ * Enlaza el botón [data-action="alternar"] (baja/reactivar): modal de confirmación -> run() ->
  * flash success(result) -> refresh().
  * @param {HTMLElement} main - Contenedor de la página con el botón.
  * @param {Object} opts - Opciones.
@@ -83,9 +83,9 @@ export function editPage(ctx, { markup, formId, save, message, redirect }) {
  * @param {function(): Promise<any>} opts.refresh - Recarga la vista tras la acción.
  * @returns {void}
  */
-export function bindToggle(main, { confirm, run, success, refresh }) {
+export function bindAlternar(main, { confirm, run, success, refresh }) {
   onAction(main, {
-    toggle: async () => {
+    alternar: async () => {
       if (!(await confirmAction(confirm()))) return;
       const result = await run();
       setFlash(success(result));

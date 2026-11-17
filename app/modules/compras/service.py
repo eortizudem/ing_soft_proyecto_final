@@ -9,7 +9,7 @@ from decimal import Decimal
 
 from app.core.bitacora import audit
 from app.core import notificaciones, parametros
-from app.core.errors import ApiError, exigir, motivo
+from app.core.excepciones import ApiError, exigir, motivo
 from app.core.repo import or_404
 from app.core.validators import Date, Dec, Int, List, Str, validate
 from app.modules.catalogo.model import add_ejemplares

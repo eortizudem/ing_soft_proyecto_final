@@ -1,7 +1,7 @@
 /** @module modules/catalogo/controller — rutas y manejo de eventos de catálogo, búsqueda pública, ubicación e importación */
 import * as session from '/js/core/session.js';
 import { $, setFlash, showError } from '/js/core/ui.js';
-import { listPage, editPage, bindToggle } from '/js/core/crud.js';
+import { listPage, editPage, bindAlternar } from '/js/core/crud.js';
 import { onAction, bindForm, bindFileToText, confirmAction, printHtml } from '/js/components/index.js';
 import { downloadPdf } from '/js/core/pdf.js';
 import * as model from './model.js';
@@ -39,7 +39,7 @@ async function list(params, ctx) {
  */
 async function edit(params, ctx) {
   const editing = !!params.id;
-  // "#/libros/nuevo?id_detalle=N": book received by Compras; prefill from the pending line.
+  // "#/libros/nuevo?id_detalle=N": libro recibido por Compras; se prellena con la línea pendiente.
   const idDetalle = editing ? '' : ctx.query.id_detalle || '';
   const [themes, book, pend] = await Promise.all([model.themes(), editing ? model.get(params.id) : model.emptyBook(),
     idDetalle ? model.pendientes().catch(() => []) : []]);
@@ -134,13 +134,13 @@ async function detail(params, ctx) {
     },
   });
   const active = book.estado === 'activo';
-  bindToggle(main, {
+  bindAlternar(main, {
     confirm: () => ({
       title: active ? 'Confirmar baja de libro' : 'Reactivar libro',
       message: `¿Deseas ${active ? 'dar de baja' : 'reactivar'} «${book.titulo}»? La ficha permanecerá en el catálogo administrativo.`,
       confirmLabel: active ? 'Dar de baja' : 'Reactivar',
     }),
-    run: () => model.toggle(book.id_libro),
+    run: () => model.alternar(book.id_libro),
     success: () => 'Estado del libro actualizado.',
     refresh,
   });
@@ -173,7 +173,7 @@ function importar(params, ctx) {
   });
 }
 
-// ---- Public search (buscar), mobile mode and floor plan ----
+// ---- Búsqueda pública (buscar), modo móvil y plano ----
 /**
  * Filtros vigentes de la búsqueda pública.
  * @type {Object}

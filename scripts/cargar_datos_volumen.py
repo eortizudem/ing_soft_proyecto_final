@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Carga el dataset de volumen de D-15 (>= 5,000 usuarios, >= 10,000 ejemplares, >= 20,000 prestamos).
+"""Carga el dataset de volumen de D-15 (>= 5,000 usuarios, >= 10,000 ejemplares, >= 20,000 préstamos).
 
 Uso:
   python3 scripts/cargar_datos_volumen.py [--db librigest_volumen] [--usuarios 5000] [--ejemplares 10000]
@@ -7,24 +7,24 @@ Uso:
   python3 scripts/cargar_datos_volumen.py --eliminar [--db librigest_volumen]
 
 Por defecto crea (o recrea) la BD aparte `librigest_volumen` con db/*.sql y la semilla de usuarios, y le agrega
-los datos sinteticos con SQL (generate_series) via psql en el contenedor `db`. Nunca toca la BD principal:
-`--db librigest` solo se acepta con confirmacion escrita (o --yes) y solo AGREGA filas (usuarios V0000001..,
-libros VL000001.., folios VS...), no borra nada. Solo biblioteca estandar; requiere el stack levantado (levantar.py).
+los datos sintéticos con SQL (generate_series) vía psql en el contenedor `db`. Nunca toca la BD principal:
+`--db librigest` solo se acepta con confirmación escrita (o --yes) y solo AGREGA filas (usuarios V0000001..,
+libros VL000001.., folios VS...), no borra nada. Solo biblioteca estándar; requiere el stack levantado (levantar.py).
 
-Datos: libros de 4 ejemplares; ~15 % de los prestamos abiertos (activos y vencidos), el resto devueltos en los
-ultimos 2 anios; adeudos de retraso (10 % pendientes), renovaciones, lista de espera (250 libros con todas sus copias prestadas), conversaciones del asistente
-con mensajes (10 % con_bibliotecario), solicitudes de compra y bitacora (login y notificaciones). Todos los usuarios V0000001..
-comparten la contrasena de ADM001 (para pruebas). Despues: ANALYZE y verificacion de conteos y consistencia.
-Para medir: ver docs/operacion.md seccion 3 (contenedor web aparte en el puerto 8199).
+Datos: libros de 4 ejemplares; ~15 % de los préstamos abiertos (activos y vencidos), el resto devueltos en los
+últimos 2 años; adeudos de retraso (10 % pendientes), renovaciones, lista de espera (250 libros con todas sus copias prestadas), conversaciones del asistente
+con mensajes (10 % con_bibliotecario), solicitudes de compra y bitácora (login y notificaciones). Todos los usuarios V0000001..
+comparten la contraseña de ADM001 (para pruebas). Después: ANALYZE y verificación de conteos y consistencia.
+Para medir: ver docs/operacion.md sección 3 (contenedor web aparte en el puerto 8199).
 
-Opciones: --db (BD destino, librigest_volumen), --usuarios / --ejemplares / --prestamos (cantidades minimas
+Opciones: --db (BD destino, librigest_volumen), --usuarios / --ejemplares / --prestamos (cantidades mínimas
 objetivo; la carga es incremental y repetible), --eliminar (borra la BD de volumen y termina), -y/--yes.
 
-Codigos de salida: 0 correcto; 1 error (nombre de BD invalido, docker/db caido, SQL fallido, cancelacion,
-verificacion con conteos por debajo del minimo o discrepancias de inventario).
+Códigos de salida: 0 correcto; 1 error (nombre de BD inválido, docker/db caído, SQL fallido, cancelación,
+verificación con conteos por debajo del mínimo o discrepancias de inventario).
 
 SEGURIDAD: con la BD por defecto (`librigest_volumen`) se DROPea y recrea sin confirmar. --eliminar hace DROP
-DATABASE de la BD indicada (se niega con la principal). Cargar en la BD principal mezcla datos sinteticos con
+DATABASE de la BD indicada (se niega con la principal). Cargar en la BD principal mezcla datos sintéticos con
 los reales y exige escribir su nombre (o -y).
 """
 import argparse
@@ -35,11 +35,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import _pg  # noqa: E402
 
-# BD principal del proyecto: protegida contra --eliminar y contra cargas sin confirmacion.
+# BD principal del proyecto: protegida contra --eliminar y contra cargas sin confirmación.
 PRINCIPAL = _pg.config()["db"]
-# Nombres de BD aceptados (evita inyeccion en los DROP/CREATE DATABASE interpolados).
+# Nombres de BD aceptados (evita inyección en los DROP/CREATE DATABASE interpolados).
 NOMBRE_VALIDO = re.compile(r"^[a-z_][a-z0-9_]{0,40}$")
-COPIAS = 4  # ejemplares por libro sintetico
+COPIAS = 4  # ejemplares por libro sintético
 
 
 def preparar_bd(db, cfg):
@@ -52,7 +52,7 @@ def preparar_bd(db, cfg):
         cfg: dict de `_pg.config()` (usuario y clave).
 
     Raises:
-        SystemExit: si falla algun comando SQL o la semilla (via `_pg`).
+        SystemExit: si falla algún comando SQL o la semilla (vía `_pg`).
     """
     usuario = cfg["usuario"]
     print(f"Creando BD {db} (se reemplaza si existe)...")
@@ -70,15 +70,15 @@ def preparar_bd(db, cfg):
 
 
 def script_carga(estado, usuarios, ejemplares, prestamos):
-    """Genera el script SQL de la carga sintetica (una sola transaccion, con generate_series).
+    """Genera el script SQL de la carga sintética (una sola transacción, con generate_series).
 
     Calcula cuantas filas faltan respecto a lo ya existente, de modo que repetir la carga no choque con claves.
 
     Args:
-        estado: dict devuelto por `estado_previo` (conteos y maximos actuales).
+        estado: dict devuelto por `estado_previo` (conteos y máximos actuales).
         usuarios: total objetivo de usuarios.
-        ejemplares: total objetivo de ejemplares (se redondea a multiplos de COPIAS).
-        prestamos: total objetivo de prestamos (~15 % abiertos).
+        ejemplares: total objetivo de ejemplares (se redondea a múltiplos de COPIAS).
+        prestamos: total objetivo de préstamos (~15 % abiertos).
 
     Returns:
         Texto SQL con BEGIN ... COMMIT; ANALYZE.
@@ -214,13 +214,13 @@ ANALYZE;
 
 
 def estado_previo(db):
-    """Consulta conteos y maximos actuales de la BD para cargar sin chocar con datos previos.
+    """Consulta conteos y máximos actuales de la BD para cargar sin chocar con datos previos.
 
     Args:
         db: base de datos a consultar.
 
     Returns:
-        dict con conteos (usuarios, ejemplares, prestamos) y maximos/bases de numeracion (u_base, l_base,
+        dict con conteos (usuarios, ejemplares, préstamos) y maximos/bases de numeración (u_base, l_base,
         s_base, libro_max, ejemplar_max, prestamo_max).
     """
     cfg = _pg.config()
@@ -241,16 +241,16 @@ def estado_previo(db):
 
 
 def verificar(db, minimos):
-    """Imprime filas por tabla y comprueba minimos y consistencia del inventario.
+    """Imprime filas por tabla y comprueba mínimos y consistencia del inventario.
 
-    Consistencia: ningun ejemplar `prestado` sin prestamo abierto, ni `disponible` con prestamo abierto.
+    Consistencia: ningún ejemplar `prestado` sin préstamo abierto, ni `disponible` con préstamo abierto.
 
     Args:
         db: base de datos a verificar.
-        minimos: dict {tabla: filas minimas esperadas}.
+        minimos: dict {tabla: filas mínimas esperadas}.
 
     Raises:
-        SystemExit: si alguna tabla queda por debajo del minimo o hay discrepancias (via `_pg.salir`).
+        SystemExit: si alguna tabla queda por debajo del mínimo o hay discrepancias (vía `_pg.salir`).
     """
     cfg = _pg.config()
     c = _pg.conteos(cfg["usuario"], db)
@@ -270,16 +270,16 @@ def verificar(db, minimos):
 
 
 def main(argv=None):
-    """Punto de entrada: valida opciones, prepara la BD (o la elimina) y carga el dataset de volumen.
+    """Punto de entrada: válida opciones, prepara la BD (o la elimina) y carga el dataset de volumen.
 
     Args:
-        argv: lista de argumentos (None usa sys.argv); util para pruebas.
+        argv: lista de argumentos (None usa sys.argv); útil para pruebas.
 
     Returns:
-        0 en exito.
+        0 en éxito.
 
     Raises:
-        SystemExit: ante nombre de BD invalido, intento de eliminar la principal, falta de confirmacion o
+        SystemExit: ante nombre de BD inválido, intento de eliminar la principal, falta de confirmación o
             cualquier fallo de docker/SQL/verificacion.
     """
     global ARGS_DB

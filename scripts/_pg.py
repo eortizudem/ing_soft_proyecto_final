@@ -1,6 +1,6 @@
-"""Ayudas compartidas por los scripts que hablan con PostgreSQL en Docker (solo biblioteca estandar).
+"""Ayudas compartidas por los scripts que hablan con PostgreSQL en Docker (solo biblioteca estándar).
 
-Modulo interno (no se ejecuta directamente): lo importan respaldo.py, restaurar.py, medir_rendimiento.py y
+Módulo interno (no se ejecuta directamente): lo importan respaldo.py, restaurar.py, medir_rendimiento.py y
 cargar_datos_volumen.py. Ejecuta `docker compose exec` contra el servicio `db`, por lo que requiere el stack
 levantado (python3 scripts/levantar.py).
 
@@ -8,7 +8,7 @@ Configuracion: lee POSTGRES_USER, POSTGRES_DB y POSTGRES_PASSWORD de .env (si ex
 entorno del proceso tienen prioridad. Por defecto todas valen `librigest`.
 
 Constantes:
-    RAIZ: directorio raiz del proyecto (cwd de todos los comandos docker compose).
+    RAIZ: directorio raíz del proyecto (cwd de todos los comandos docker compose).
     CONTEO_SQL: consulta que devuelve `tabla=filas` para cada tabla base del esquema public.
 """
 import os
@@ -27,7 +27,7 @@ def salir(msg, codigo=1):
 
     Args:
         msg: mensaje de error para el usuario.
-        codigo: codigo de salida del proceso (1 por defecto).
+        codigo: código de salida del proceso (1 por defecto).
 
     Raises:
         SystemExit: siempre.
@@ -37,10 +37,10 @@ def salir(msg, codigo=1):
 
 
 def _env_archivo():
-    """Lee las variables de `.env` en la raiz del proyecto (ignora lineas vacias y comentarios).
+    """Lee las variables de `.env` en la raíz del proyecto (ignora líneas vacías y comentarios).
 
     Returns:
-        dict clave -> valor (sin comillas); vacio si no existe el archivo. El llamador decide la
+        dict clave -> valor (sin comillas); vacío si no existe el archivo. El llamador decide la
         precedencia frente a `os.environ`.
     """
     valores = {}
@@ -65,8 +65,17 @@ def config():
             "clave": env.get("POSTGRES_PASSWORD", "librigest")}
 
 
+def modelo_ia():
+    """Modelo de Ollama del asistente: `OLLAMA_MODEL` del entorno o de `.env` (por defecto `qwen2.5:1.5b`).
+
+    Returns:
+        str: nombre del modelo.
+    """
+    return {**_env_archivo(), **os.environ}.get("OLLAMA_MODEL", "qwen2.5:1.5b")
+
+
 def compose(*args, **kw):
-    """Ejecuta `docker compose <args>` con cwd en la raiz del proyecto.
+    """Ejecuta `docker compose <args>` con cwd en la raíz del proyecto.
 
     Args:
         *args: argumentos de docker compose (p. ej. "exec", "-T", "db", ...).
@@ -74,7 +83,7 @@ def compose(*args, **kw):
             se usa DEVNULL para que docker no consuma el stdin del usuario.
 
     Returns:
-        subprocess.CompletedProcess del comando (no lanza si el codigo de salida es != 0).
+        subprocess.CompletedProcess del comando (no lanza si el código de salida es != 0).
     """
     kw.setdefault("stdin", subprocess.DEVNULL)  # que docker no consuma el stdin del usuario
     return subprocess.run(["docker", "compose", *args], cwd=RAIZ, **kw)
@@ -87,14 +96,14 @@ def psql(usuario, db, sentencia, base="postgres"):
         usuario: rol de PostgreSQL.
         db: base de datos a la que se conecta si `base` es falsy.
         sentencia: SQL a ejecutar (`psql -c`).
-        base: base de conexion; por defecto `postgres` (necesario para CREATE/DROP DATABASE). Pasar
+        base: base de conexión; por defecto `postgres` (necesario para CREATE/DROP DATABASE). Pasar
             `base=db` para ejecutar dentro de `db`.
 
     Returns:
-        Salida estandar de psql (texto, sin alinear y sin encabezados).
+        Salida estándar de psql (texto, sin alinear y sin encabezados).
 
     Raises:
-        SystemExit: si psql falla (via `salir`).
+        SystemExit: si psql falla (vía `salir`).
     """
     r = compose("exec", "-T", "db", "psql", "-U", usuario, "-d", base or db, "-v", "ON_ERROR_STOP=1", "-At",
                 "-c", sentencia, capture_output=True, text=True)
@@ -104,14 +113,14 @@ def psql(usuario, db, sentencia, base="postgres"):
 
 
 def verificar_docker():
-    """Comprueba que el servicio `db` este en ejecucion.
+    """Comprueba que el servicio `db` este en ejecución.
 
     Raises:
-        SystemExit: si `docker compose exec db true` falla (via `salir`).
+        SystemExit: si `docker compose exec db true` falla (vía `salir`).
     """
     r = compose("exec", "-T", "db", "true", capture_output=True)
     if r.returncode != 0:
-        salir("El servicio 'db' no esta en ejecucion. Levanta el stack con: python3 scripts/levantar.py")
+        salir("El servicio 'db' no está en ejecución. Levanta el stack con: python3 scripts/levantar.py")
 
 
 def conteos(usuario, db):
@@ -125,7 +134,7 @@ def conteos(usuario, db):
         dict {tabla: filas}.
 
     Raises:
-        SystemExit: si psql falla (via `psql`).
+        SystemExit: si psql falla (vía `psql`).
     """
     salida = psql(usuario, db, CONTEO_SQL, base=db)
     return {k: int(v) for k, _, v in (l.partition("=") for l in salida.splitlines() if l)}
@@ -140,10 +149,10 @@ def psql_script(usuario, db, texto):
         texto: contenido del script, enviado por stdin.
 
     Returns:
-        Salida estandar de psql.
+        Salida estándar de psql.
 
     Raises:
-        SystemExit: ante el primer error de SQL (via `salir`).
+        SystemExit: ante el primer error de SQL (vía `salir`).
     """
     r = compose("exec", "-T", "db", "psql", "-U", usuario, "-d", db, "-v", "ON_ERROR_STOP=1", "-q", "-f", "-",
                 input=texto, capture_output=True, text=True, stdin=None)

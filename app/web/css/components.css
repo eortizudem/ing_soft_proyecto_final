@@ -1,6 +1,6 @@
-/* Canonical components. Spacing comes only from the --space-* tokens in base.css. */
+/* Componentes canónicos. El espaciado sale solo de los tokens --space-* de base.css. */
 
-/* ---- Buttons and badges ---- */
+/* ---- Botones e insignias ---- */
 .btn {
   display:inline-flex;
   align-items:center;
@@ -60,7 +60,7 @@
   background:var(--bad-bg);
 }
 
-/* ---- Vertical rhythm helpers ---- */
+/* ---- Ayudas de ritmo vertical ---- */
 .stack {
   display:flex;
   flex-direction:column;
@@ -88,7 +88,7 @@
   grid-column:1/-1;
 }
 
-/* ---- Card / panel ---- */
+/* ---- Tarjeta / panel ---- */
 .card {
   display:flex;
   flex-direction:column;
@@ -129,7 +129,7 @@
   color:var(--muted);
 }
 
-/* ---- Notices ---- */
+/* ---- Avisos ---- */
 .notice {
   background:var(--info-bg);
   padding:var(--space-4);
@@ -156,7 +156,7 @@
   word-break:break-all;
 }
 
-/* ---- Fields and forms ---- */
+/* ---- Campos y formularios ---- */
 .field {
   display:flex;
   flex-direction:column;
@@ -223,7 +223,7 @@
   white-space:nowrap;
 }
 
-/* ---- Toolbar: search + filters ---- */
+/* ---- Barra de herramientas: búsqueda y filtros ---- */
 .toolbar {
   display:flex;
   flex-wrap:wrap;
@@ -243,7 +243,7 @@
   flex:none;
 }
 
-/* ---- Tables ---- */
+/* ---- Tablas ---- */
 .table-wrap {
   overflow-x:auto;
 }
@@ -293,7 +293,7 @@ tbody tr td:last-child {
   min-width:210px;
 }
 
-/* ---- Empty state ---- */
+/* ---- Estado vacío ---- */
 .empty {
   display:flex;
   flex-direction:column;
@@ -305,7 +305,7 @@ tbody tr td:last-child {
   text-align:center;
 }
 
-/* ---- Detail view (dl grid) ---- */
+/* ---- Vista de detalle (rejilla dl) ---- */
 .detail-grid {
   display:grid;
   grid-template-columns:repeat(2,minmax(0,1fr));
@@ -335,7 +335,7 @@ tbody tr td:last-child {
   color:var(--muted);
 }
 
-/* ---- Purchases ---- */
+/* ---- Compras ---- */
 .purchase-lines {
   display:flex;
   flex-direction:column;
@@ -368,7 +368,7 @@ tbody tr td:last-child {
   font-size:12px;
 }
 
-/* ---- Search results and location ---- */
+/* ---- Resultados de búsqueda y ubicación ---- */
 .map {
   background:var(--soft);
 }
@@ -401,7 +401,7 @@ tbody tr td:last-child {
   color:var(--muted);
 }
 
-/* ---- Dashboard cards ---- */
+/* ---- Tarjetas del panel de inicio ---- */
 .quick-card .btn {
   margin-top:auto;
   width:100%;
@@ -418,14 +418,14 @@ tbody tr td:last-child {
   line-height:2.4;
 }
 
-/* ---- Login helpers ---- */
+/* ---- Ayudas del inicio de sesión ---- */
 .demo-buttons {
   display:grid;
   grid-template-columns:repeat(3,1fr);
   gap:var(--space-3);
 }
 
-/* ---- FAQ ---- */
+/* ---- Preguntas frecuentes ---- */
 .faq details {
   padding:var(--space-3) 0;
   border-bottom:var(--border);
@@ -442,7 +442,7 @@ tbody tr td:last-child {
   color:var(--muted);
 }
 
-/* ---- Modal and toast ---- */
+/* ---- Ventana modal y aviso temporal ---- */
 .modal-overlay {
   position:fixed;
   inset:0;
@@ -495,7 +495,7 @@ tbody tr td:last-child {
   display:none;
 }
 
-/* ---- Meter (progress) ---- */
+/* ---- Medidor (progreso) ---- */
 .meter-block {
   display:flex;
   flex-direction:column;
@@ -514,7 +514,7 @@ tbody tr td:last-child {
   accent-color:var(--primary);
 }
 
-/* ---- Chat panel ---- */
+/* ---- Panel del chat ---- */
 .chat {
   display:flex;
   flex-direction:column;

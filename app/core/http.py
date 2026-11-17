@@ -1,4 +1,4 @@
-"""Ayudas HTTP para controladores: cuerpo JSON, parametros de consulta y respuestas."""
+"""Ayudas HTTP para controladores: cuerpo JSON, parámetros de consulta y respuestas."""
 from flask import request
 
 
@@ -8,7 +8,7 @@ def body(strict=False):
     if isinstance(data, dict):
         return data
     if strict:
-        from .errors import ApiError
+        from .excepciones import ApiError
 
         raise ApiError("El cuerpo de la petición debe ser un objeto JSON.")
     return {}
@@ -29,12 +29,12 @@ def created(data):
 
 
 def _to_bool(raw):
-    """'1'/'true' (sin distinguir mayusculas) -> True; cualquier otro texto -> False."""
+    """'1'/'true' (sin distinguir mayúsculas) -> True; cualquier otro texto -> False."""
     return raw.strip().lower() in ("1", "true")
 
 
 def _to_int(default):
-    """Fabrica un conversor a entero que devuelve `default` si el texto no es numerico."""
+    """Fábrica un conversor a entero que devuelve `default` si el texto no es numérico."""
     def conv(raw):
         """Convierte `raw` a int o devuelve el valor por defecto."""
         try:
@@ -46,10 +46,10 @@ def _to_int(default):
 
 
 def query_args(spec):
-    """Parametros de consulta tipados. spec = {nombre: valor_por_defecto | (defecto, conversor)}.
+    """Parámetros de consulta tipados. spec = {nombre: valor_por_defecto | (defecto, conversor)}.
 
     El tipo se infiere del defecto: str -> texto, bool -> "1"/"true", int -> entero
-    (invalido = defecto). Nunca lanza error: los filtros son opcionales.
+    (inválido = defecto). Nunca lanza error: los filtros son opcionales.
     """
     out = {}
     for name, rule in spec.items():

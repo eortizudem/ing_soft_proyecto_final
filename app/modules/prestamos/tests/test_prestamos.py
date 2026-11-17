@@ -224,6 +224,13 @@ def test_crear_422_conserva_codigos_y_no_escribe(bibliotecario):
     assert r.status_code == 422 and r.get_json()["motivos"][0]["codigo"] == "LIBRO_NO_ENCONTRADO"
 
 
+def test_recibo_incluye_bibliotecario(bibliotecario):
+    """El recibo consultado después del alta muestra al bibliotecario que registró el préstamo."""
+    d = _prestar(bibliotecario, make_user(), make_book()).get_json()
+    rec = bibliotecario.get(f"/api/prestamos/{d['prestamo']['id_prestamo']}/recibo").get_json()
+    assert rec["bibliotecario"] and isinstance(rec["bibliotecario"], str)
+
+
 def test_canales_del_recibo(bibliotecario):
     """Valida canales del recibo: por defecto email, whatsapp permitido, otros rechazados."""
     u, libro = make_user(), make_book()

@@ -234,6 +234,21 @@ def notificaciones_recibo(folio_recibo):
                           "AND detalle LIKE %s ORDER BY id_bitacora", (f"%|Recibo de préstamo {folio_recibo}:%",))
 
 
+def bibliotecario_de(folio):
+    """Nombre del usuario que registró el préstamo (según la bitácora `prestamo_crear`).
+
+    Args:
+        folio: Folio del préstamo (p. ej. 'PRE-000012').
+
+    Returns:
+        str | None: Nombre completo del bibliotecario, o None si no hay registro.
+    """
+    fila = repo.fetch_one("SELECT u.nombre_completo FROM bitacora b JOIN usuario u ON u.id_usuario = b.id_usuario "
+                          "WHERE b.accion = 'prestamo_crear' AND b.detalle LIKE %s ORDER BY b.id_bitacora LIMIT 1",
+                          (f"{folio} %",))
+    return fila["nombre_completo"] if fila else None
+
+
 def politicas():
     """Lista todas las políticas de préstamo con su rol.
 

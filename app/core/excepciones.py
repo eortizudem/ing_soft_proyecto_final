@@ -10,8 +10,8 @@ class ApiError(Exception):
         """Crea el error de negocio.
 
         Args:
-            message: texto en espanol para el usuario.
-            status: codigo HTTP (400 por defecto).
+            message: texto en español para el usuario.
+            status: código HTTP (400 por defecto).
             extra: dict que se mezcla en el cuerpo JSON de la respuesta.
         """
         super().__init__(message)
@@ -39,7 +39,7 @@ def motivo(codigo, mensaje):
 
 
 def exigir(motivos, message="No se cumplen las condiciones."):
-    """Lanza ApiError.reglas si hay motivos; no hace nada si la lista esta vacia."""
+    """Lanza ApiError.reglas si hay motivos; no hace nada si la lista está vacía."""
     if motivos:
         raise ApiError.reglas(motivos, message)
 
@@ -53,7 +53,7 @@ def register(app):
 
     @app.errorhandler(HTTPException)
     def http_error(e):
-        """Errores HTTP de Werkzeug: JSON bajo /api (mensajes en espanol para 404/405); fuera de /api, la pagina por defecto."""
+        """Errores HTTP de Werkzeug: JSON bajo /api (mensajes en español para 404/405); fuera de /api, la página por defecto."""
         if request.path.startswith("/api"):
             msgs = {404: "Recurso no encontrado.", 405: "Método no permitido."}
             return jsonify(error=msgs.get(e.code, e.description)), e.code
@@ -61,10 +61,10 @@ def register(app):
 
     @app.errorhandler(Exception)
     def unexpected(e):
-        """Excepcion no controlada: la registra en log y en la bitacora de errores (PS-S3-06) y responde 500 generico."""
+        """Excepcion no controlada: la registra en log y en la bitácora de errores (PS-S3-06) y responde 500 genérico."""
         app.logger.exception("Error inesperado")
-        # PS-S3-06: el 500 queda en la bitacora de errores (usuario de la sesion si lo hay).
-        from . import errores
+        # PS-S3-06: el 500 queda en la bitácora de errores (usuario de la sesión si lo hay).
+        from . import bitacora_errores
 
-        errores.registrar("servidor", f"{request.method} {request.path}: {type(e).__name__}: {e}", session.get("uid"))
+        bitacora_errores.registrar("servidor", f"{request.method} {request.path}: {type(e).__name__}: {e}", session.get("uid"))
         return jsonify(error="Error interno del servidor."), 500

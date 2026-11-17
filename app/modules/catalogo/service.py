@@ -9,8 +9,8 @@ import io
 
 from app.core.auth import has_permission
 from app.core.bitacora import audit
-from app.core.errors import ApiError
-from app.core.estado import toggle_estado
+from app.core.excepciones import ApiError
+from app.core.estado import alternar_estado
 from app.core.repo import or_404
 from app.core.validators import CODE_RE, Enum, Int, Dec, Str, validate
 
@@ -231,7 +231,7 @@ def alternar(id_libro, actor):
     Raises:
         ApiError: 404 si no existe; 400 si se inactiva con préstamos activos.
     """
-    toggle_estado("libro", "id_libro", id_libro, guard=_guard_baja,
+    alternar_estado("libro", "id_libro", id_libro, guard=_guard_baja,
                   load=lambda i: or_404(model.get(i), NO_ENCONTRADO))
     return model.get(id_libro)
 

@@ -3,9 +3,9 @@
  * Todo lo visual (botones, formularios, tablas...) vive en /js/components/.
  */
 
-// ---- Safe HTML templating -------------------------------------------------
-// html`...` escapes every interpolated value unless it is itself a Safe string
-// (the result of another html`` call or raw()). Arrays are joined.
+// ---- Plantillas HTML seguras ----------------------------------------------
+// html`...` escapa cada valor interpolado salvo que ya sea una cadena Safe
+// (resultado de otra llamada a html`` o de raw()). Los arrays se unen.
 /**
  * Cadena ya escapada/confiable: `html` no vuelve a escapar valores de esta clase.
  * @extends String
@@ -88,7 +88,7 @@ export function debounce(fn, ms = 250) {
   };
 }
 
-// ---- Messages: #flash (success after navigation), #alert (errors), toast ------
+// ---- Mensajes: #flash (éxito tras navegar), #alert (errores) y toast ----------
 /** @type {string} Mensaje flash pendiente de mostrarse tras la navegación. */
 let flashMessage = '';
 /**

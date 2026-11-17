@@ -5,25 +5,31 @@ Uso:
   python scripts/levantar.py              # build + up -d, espera /api/health y muestra las cuentas demo
   python scripts/levantar.py --no-build   # igual, sin reconstruir la imagen
   python scripts/levantar.py --logs       # tras levantar, sigue los logs del servicio web (Ctrl+C sale)
+  python scripts/levantar.py --sin-ia     # no descarga ni precalienta el modelo de IA (el asistente usa solo reglas)
   python scripts/levantar.py --down       # detiene y elimina los contenedores (el volumen pgdata se conserva)
 
 Pasos: verifica docker / compose v2 / demonio; crea .env desde .env.example si no existe; ejecuta
-`docker compose up -d [--build]`; sondea http://localhost:8000/api/health hasta 90 s; imprime URL y credenciales.
+`docker compose up -d [--build]`; sondea http://localhost:8000/api/health hasta 90 s; asegura el modelo de IA del
+asistente (descarga con progreso la primera vez, ~1 GB, y lo precalienta); imprime URL y credenciales. Si la
+descarga falla (sin internet) el sistema sigue funcionando: el asistente responde con reglas.
 
-Codigos de salida: 0 correcto; 1 error (docker ausente, demonio caido, falta .env.example, fallo de compose o
-la API no respondio a tiempo); con --down o `up` fallido se propaga el codigo de docker compose.
+Variables: OLLAMA_MODEL (modelo; ver .env.example). Códigos de salida: 0 correcto; 1 error (docker ausente, demonio caído, falta .env.example, fallo de compose o
+la API no respondió a tiempo); con --down o `up` fallido se propaga el código de docker compose.
 
-Seguridad: no pide confirmacion y no borra datos (--down no usa -v). Las credenciales impresas son
-solo de demostracion; cambiar SECRET_KEY en .env fuera de desarrollo.
+Seguridad: no pide confirmación y no borra datos (--down no usa -v). Las credenciales impresas son
+solo de demostración; cambiar SECRET_KEY en .env fuera de desarrollo.
 """
 import argparse
 import json
+import os
 import shutil
 import subprocess
 import sys
 import time
 import urllib.request
 from pathlib import Path
+
+from _pg import modelo_ia
 
 RAIZ = Path(__file__).resolve().parent.parent
 URL = "http://localhost:8000"
@@ -45,7 +51,7 @@ def salir(msg, codigo=1):
 
     Args:
         msg: mensaje de error.
-        codigo: codigo de salida (1 por defecto).
+        codigo: código de salida (1 por defecto).
 
     Raises:
         SystemExit: siempre.
@@ -55,7 +61,7 @@ def salir(msg, codigo=1):
 
 
 def correr(args, **kw):
-    """Ejecuta un comando con cwd en la raiz del proyecto.
+    """Ejecuta un comando con cwd en la raíz del proyecto.
 
     Args:
         args: lista de argumentos del comando.
@@ -71,7 +77,7 @@ def verificar_docker():
     """Comprueba que docker, el plugin compose v2 y el demonio esten disponibles.
 
     Raises:
-        SystemExit: con un mensaje orientado al usuario si falta alguno (via `salir`).
+        SystemExit: con un mensaje orientado al usuario si falta alguno (vía `salir`).
     """
     if not shutil.which("docker"):
         salir("No se encontró 'docker'. Instala Docker Desktop o Docker Engine: https://docs.docker.com/get-docker/")
@@ -82,7 +88,7 @@ def verificar_docker():
 
 
 def preparar_env():
-    """Crea `.env` copiando `.env.example` si aun no existe.
+    """Crea `.env` copiando `.env.example` si aún no existe.
 
     Raises:
         SystemExit: si no existen ni `.env` ni `.env.example`.
@@ -112,7 +118,7 @@ def esperar_salud(timeout=90):
     """Sondea /api/health cada 2 s hasta que responda o venza el plazo.
 
     Args:
-        timeout: segundos maximos de espera.
+        timeout: segundos máximos de espera.
 
     Raises:
         SystemExit: si la API no responde dentro de `timeout`.
@@ -129,15 +135,35 @@ def esperar_salud(timeout=90):
     salir(f"La API no respondió en {timeout} s. Revisa: docker compose logs web")
 
 
+def asegurar_modelo():
+    """Descarga el modelo de IA si falta (con progreso) y lo precalienta para que la primera pregunta no espere la carga.
+
+    La descarga es idempotente: si el modelo ya está en el volumen `ollama_models`, no baja nada. Un fallo solo se
+    avisa (el asistente seguirá con reglas); no detiene el arranque.
+    """
+    modelo = modelo_ia()
+    print(f"\nAsistente con IA: modelo {modelo}. La primera vez se descargan ~1 GB (puede tardar varios minutos);"
+          " las siguientes veces ya está guardado.")
+    if correr(["docker", "compose", "exec", "-T", "ollama", "ollama", "pull", modelo]).returncode:
+        print("AVISO: no se pudo descargar el modelo (¿sin internet?). El asistente responderá con reglas hasta que "
+              "se descargue: python scripts/levantar.py --no-build")
+        return
+    print("Precalentando el modelo...", end=" ", flush=True)
+    calentar = ("from app.core import ia; ia.chat('Responde ok.', [{'role': 'user', 'content': 'hola'}], {'num_predict': 1})")
+    r = correr(["docker", "compose", "exec", "-T", "web", "python", "-c", calentar], capture_output=True)
+    print("listo." if r.returncode == 0 else "no respondió (se reintentará con la primera pregunta).")
+
+
 def main():
     """Punto de entrada: interpreta las opciones y levanta (o detiene con --down) el stack.
 
     Returns:
-        None. Termina con `sys.exit` ante errores (ver codigos de salida en el docstring del modulo).
+        None. Termina con `sys.exit` ante errores (ver códigos de salida en el docstring del módulo).
     """
     ap = argparse.ArgumentParser(description="Levanta LibriGest con Docker Compose.")
     ap.add_argument("--no-build", action="store_true", help="no reconstruir la imagen")
     ap.add_argument("--logs", action="store_true", help="seguir los logs después de levantar")
+    ap.add_argument("--sin-ia", action="store_true", help="no descargar ni precalentar el modelo de IA (solo reglas)")
     ap.add_argument("--down", action="store_true", help="detener y eliminar los contenedores")
     a = ap.parse_args()
 
@@ -151,10 +177,12 @@ def main():
     preparar_env()
     cmd = ["docker", "compose", "up", "-d"] + ([] if a.no_build else ["--build"])
     print("Ejecutando:", " ".join(cmd))
-    r = correr(cmd)
+    r = correr(cmd, env={**os.environ, "ASISTENTE_IA": "0"} if a.sin_ia else None)   # 0: tampoco usa ni descarga el modelo
     if r.returncode:
         salir("Falló 'docker compose up'.", r.returncode)
     esperar_salud()
+    if not a.sin_ia:
+        asegurar_modelo()
     print(f"\nLibriGest está en: {URL}\n\nCuentas de demostración:")
     for rol, mat, pw in CREDENCIALES:
         print(f"  {rol:<16} matrícula {mat:<9} contraseña {pw}")

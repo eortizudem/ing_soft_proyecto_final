@@ -5,7 +5,7 @@ from decimal import Decimal
 import pytest
 
 from app.core import circulacion as c
-from app.core.errors import ApiError, exigir
+from app.core.excepciones import ApiError, exigir
 from app.testing import make_book, make_loan, make_user, sql
 
 POL = {"max_libros": 2}
@@ -171,21 +171,32 @@ def test_autorizar_prestamo_reservado_bd(app):
 
 
 def test_autorizar_renovacion_bd(app):
-    """Autorizar renovacion sobre un prestamo real calcula motivos, nueva fecha y retraso."""
+    """Autorizar renovacion sobre un prestamo real calcula motivos y nueva fecha."""
     u, libro = make_user(), make_book(ejemplares=1)
     pid = make_loan(u["id_usuario"], libro["id_libro"])
     with app.app_context():
         r = c.autorizar_renovacion(pid)
         assert r["permitido"] and r["max_renovaciones"] == 2
         assert r["nueva_fecha_vencimiento"] == c.fecha_renovacion(r["prestamo"]["fecha_vencimiento"], 5)
-    sql("INSERT INTO lista_espera(id_usuario,id_libro) VALUES (%s,%s)", (make_user()["id_usuario"], libro["id_libro"]))
-    sql("UPDATE prestamo SET num_renovaciones=2, fecha_vencimiento=CURRENT_DATE-3 WHERE id_prestamo=%s", (pid,))
-    with app.app_context():
-        r = c.autorizar_renovacion(pid)
-        assert {m["codigo"] for m in r["motivos"]} == {"PRESTAMO_VENCIDO", "MAX_RENOVACIONES", "LISTA_ESPERA"}
-        assert r["dias_retraso"] >= 2
         with pytest.raises(ApiError):
             c.autorizar_renovacion(0)
+
+
+@pytest.mark.parametrize("offset", range(7))
+def test_autorizar_renovacion_retraso_cualquier_dia(app, offset):
+    """El retraso son dias habiles (lun-vie) y no depende del dia de la semana en que se consulta (`hoy` explicito)."""
+    hoy = date(2026, 11, 16) + timedelta(days=offset)  # recorre lunes..domingo
+    vence = hoy - timedelta(days=3)
+    esperado = sum(1 for i in range(1, 4) if (vence + timedelta(days=i)).weekday() < 5)  # conteo independiente
+    u, libro = make_user(), make_book(ejemplares=1)
+    pid = make_loan(u["id_usuario"], libro["id_libro"])
+    sql("INSERT INTO lista_espera(id_usuario,id_libro) VALUES (%s,%s)", (make_user()["id_usuario"], libro["id_libro"]))
+    sql("UPDATE prestamo SET num_renovaciones=2, fecha_vencimiento=%s WHERE id_prestamo=%s", (vence, pid))
+    with app.app_context():
+        r = c.autorizar_renovacion(pid, hoy)
+        assert {m["codigo"] for m in r["motivos"]} == {"PRESTAMO_VENCIDO", "MAX_RENOVACIONES", "LISTA_ESPERA"}
+        assert r["dias_retraso"] == esperado
+        assert 1 <= r["dias_retraso"] <= 3
 
 
 def test_valor_reposicion_bd(app):

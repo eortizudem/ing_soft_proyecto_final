@@ -16,8 +16,8 @@ from werkzeug.security import generate_password_hash
 
 from app.core import circulacion
 from app.core.bitacora import audit, log
-from app.core.errors import ApiError
-from app.core.estado import toggle_estado
+from app.core.excepciones import ApiError
+from app.core.estado import alternar_estado
 from app.core.repo import or_404
 from app.core.validators import CODE_RE, Email, Enum, Str, validate
 
@@ -36,7 +36,7 @@ SCHEMA = {
     "correo": Email("correo institucional", msg="Introduce un correo institucional válido."),
     "rol": Enum(model.roles_asignables, "Selecciona un perfil válido.", label="perfil"),
     "estado": Enum(ESTADOS, "Selecciona un estado válido.", label="estado"),
-    "fuente_validacion": Enum(FUENTES, "Selecciona una origen del registro válida.", label="origen del registro"),
+    "fuente_validacion": Enum(FUENTES, "Selecciona un origen del registro válido.", label="origen del registro"),
 }
 SCHEMA_CREAR = {**SCHEMA, "password": Str("contraseña", **_PWD)}
 SCHEMA_EDITAR = {**SCHEMA, "password": Str("contraseña", required=False, **_PWD)}
@@ -192,7 +192,7 @@ def alternar(id_usuario, actor):
     Raises:
         ApiError: 404 si no existe; 400 si la baja incumple `_guard_baja`.
     """
-    toggle_estado(
+    alternar_estado(
         "usuario", "id_usuario", id_usuario, load=obtener,
         guard=lambda u, nuevo: _guard_baja(u, actor) if nuevo == "inactivo" else None,
         extra={"inactivo": {"fecha_baja": date.today(), "registro_vigente": False},

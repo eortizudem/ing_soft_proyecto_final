@@ -4,7 +4,7 @@ from decimal import Decimal
 
 import pytest
 
-from app.core.errors import ApiError
+from app.core.excepciones import ApiError
 from app.core.validators import Bool, CODE_RE, Date, Dec, Email, Enum, Int, List, Str, validate
 
 
@@ -15,7 +15,7 @@ def err(schema, data, partial=False):
     return e.value
 
 
-def test_str_required_label_and_strip():
+def test_texto_obligatorio_etiqueta_y_recorte():
     """Str requerido: usa la etiqueta en el mensaje, quita espacios y respeta el maximo."""
     s = {"nombre": Str("nombre completo", max=5)}
     assert validate({"nombre": "  Ana "}, s) == {"nombre": "Ana"}
@@ -26,13 +26,13 @@ def test_str_required_label_and_strip():
     assert err(s, {"nombre": "abcdef"}).message == "El campo nombre completo admite máximo 5 caracteres."
 
 
-def test_str_label_defaults_to_field_name_and_coerces():
+def test_texto_etiqueta_por_defecto_es_el_campo_y_convierte():
     """Sin etiqueta se usa el nombre del campo; los valores no texto se convierten a str."""
     assert err({"tema": Str()}, {}).message == "Completa el campo tema."
     assert validate({"n": 12}, {"n": Str()}) == {"n": "12"}
 
 
-def test_str_transform_pattern_and_custom_messages():
+def test_texto_transformacion_patron_y_mensajes_propios():
     """Str aplica mayusculas, patron y mensajes personalizados."""
     s = {"c": Str("clave", upper=True, pattern=CODE_RE, pattern_msg="Mala clave.")}
     assert validate({"c": " ab-1 "}, s) == {"c": "AB-1"}
@@ -46,14 +46,14 @@ def test_str_transform_pattern_and_custom_messages():
     assert err({"d": Str("d", max=1, max_msg="Largo.")}, {"d": "ab"}).message == "Largo."
 
 
-def test_str_optional_default_and_blank_skips_checks():
+def test_texto_opcional_valor_por_defecto_y_vacio_omite_reglas():
     """Un Str opcional vacio devuelve el defecto sin validar largo ni patron."""
     s = {"d": Str("destinatario", max=3, required=False, default="Tesorería")}
     assert validate({}, s) == {"d": "Tesorería"}
     assert validate({"d": "  "}, s) == {"d": "Tesorería"}
 
 
-def test_email():
+def test_correo():
     """Email se normaliza a minusculas y rechaza formatos invalidos."""
     s = {"correo": Email("correo institucional", msg="Correo mal.")}
     assert validate({"correo": " A@B.CO "}, s) == {"correo": "a@b.co"}
@@ -62,7 +62,7 @@ def test_email():
     assert err(s, {"correo": "a" * 121 + "@b.co"}).message.startswith("El campo correo institucional admite máximo")
 
 
-def test_int_edge_cases():
+def test_entero_casos_limite():
     """Int acepta '12' y 12.0, rechaza bool/decimales y valida el rango."""
     s = {"n": Int(1, 10, msg="Entero 1-10.")}
     assert validate({"n": "5"}, s) == {"n": 5}
@@ -74,7 +74,7 @@ def test_int_edge_cases():
     assert validate({}, {"n": Int(required=False, default=7, msg="m")}) == {"n": 7}
 
 
-def test_dec_range_places_and_finite():
+def test_decimal_rango_decimales_y_finitud():
     """Dec valida rango, cuantiza a `places` y rechaza valores no finitos."""
     s = {"p": Dec(0, 100, places=2, msg="Precio.")}
     assert validate({"p": "10.555"}, s)["p"] == Decimal("10.56")
@@ -85,7 +85,7 @@ def test_dec_range_places_and_finite():
     assert validate({"p": "100.5"}, {"p": Dec(msg="x")})["p"] == Decimal("100.5")
 
 
-def test_enum_static_callable_and_label():
+def test_enum_estatico_funcion_y_etiqueta():
     """Enum acepta valores fijos o de una funcion y usa la etiqueta en el mensaje de requerido."""
     s = {"e": Enum(("a", "b"), "Elige.")}
     assert validate({"e": " a "}, s) == {"e": "a"}
@@ -97,7 +97,7 @@ def test_enum_static_callable_and_label():
     assert validate({}, {"e": Enum(["a"], "m", required=False)}) == {"e": None}
 
 
-def test_bool_strict():
+def test_booleano_estricto():
     """Bool solo acepta true/false JSON."""
     s = {"b": Bool(msg="Booleano.")}
     assert validate({"b": False}, s) == {"b": False}
@@ -106,7 +106,7 @@ def test_bool_strict():
         assert err(s, {"b": bad}).message == "Booleano.", bad
 
 
-def test_date():
+def test_fecha():
     """Date acepta ISO, date y datetime, y valida el rango."""
     s = {"d": Date(min=date(2020, 1, 1), msg="Fecha.")}
     assert validate({"d": "2021-05-04"}, s) == {"d": date(2021, 5, 4)}
@@ -115,7 +115,7 @@ def test_date():
         assert err(s, {"d": bad}).message == "Fecha.", bad
 
 
-def test_list_of_schemas_and_values():
+def test_lista_de_esquemas_y_valores():
     """List valida listas de objetos (esquema) y de valores, con minimo de elementos."""
     s = {"l": List({"n": Int(1, 5, msg="N.")}, min=1, msg="Lista.")}
     assert validate({"l": [{"n": "2"}]}, s) == {"l": [{"n": 2}]}
@@ -126,7 +126,7 @@ def test_list_of_schemas_and_values():
     assert err({"l": List(Str("x"), max=1, msg="Poco.")}, {"l": ["a", "b"]}).message == "Poco."
 
 
-def test_validate_only_schema_keys_partial_and_non_dict():
+def test_validar_solo_claves_del_esquema_parcial_y_no_dict():
     """`validate` devuelve solo claves del esquema, omite ausentes con partial y trata un no-dict como vacio."""
     s = {"a": Str("a"), "b": Int(msg="b")}
     assert validate({"a": "x", "b": 1, "extra": "no", "id": 5}, s) == {"a": "x", "b": 1}
@@ -137,7 +137,7 @@ def test_validate_only_schema_keys_partial_and_non_dict():
     assert err(s, [1]).message == "Completa el campo a."
 
 
-def test_first_error_follows_schema_order():
+def test_primer_error_sigue_el_orden_del_esquema():
     """El error devuelto es el del primer campo que falla segun el orden del esquema."""
     s = {"a": Str("a"), "b": Str("b")}
     assert err(s, {}).message == "Completa el campo a."

@@ -48,7 +48,7 @@ export const FILTERS = {
 export const filterQuery = (tipo, values = {}) =>
   Object.fromEntries((FILTERS[tipo] || []).map((k) => [k, values[k]]).filter(([, v]) => v && v !== 'false'));
 
-// formato: pantalla | pdf | impresion (each call is logged by the server)
+// formato: pantalla | pdf | impresion (el servidor registra cada llamada)
 /**
  * Genera el reporte (cada llamada se registra en el servidor). Llama a GET /api/reportes/:tipo.
  * @param {string} tipo - Tipo de reporte.
@@ -76,7 +76,7 @@ export const sendDebtorNotice = (incluir_docentes = false) => api.post('/reporte
  */
 export const reportPath = (tipo, values = {}) => `reportes/${tipo}${query(filterQuery(tipo, values))}`;
 
-// Plain-text lines for the hand-written PDF.
+// Líneas de texto plano para el PDF escrito a mano.
 /**
  * Líneas de texto plano para el PDF.
  * @param {{tipo: string, generado: string, generado_por: string, total: number, columnas: string[], filas: Array[]}} report - Reporte.

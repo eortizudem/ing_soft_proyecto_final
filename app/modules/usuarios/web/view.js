@@ -105,7 +105,7 @@ export const detail = (u, roles, hist) => page({
     ],
     actions: [
       btn({ label: 'Editar usuario', href: `usuarios/${u.id_usuario}/editar`, variant: 'primary' }),
-      btn({ label: u.estado === 'activo' ? 'Dar de baja' : 'Reactivar cuenta', action: 'toggle', variant: 'danger' }),
+      btn({ label: u.estado === 'activo' ? 'Dar de baja' : 'Reactivar cuenta', action: 'alternar', variant: 'danger' }),
       btn({ label: 'Volver a usuarios', href: 'usuarios', variant: 'link' }),
     ],
   })}${historial(hist)}`,

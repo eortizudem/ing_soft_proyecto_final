@@ -41,11 +41,11 @@ async function request(method, path, body) {
   try {
     data = await response.json();
   } catch {
-    /* empty or non-JSON body */
+    /* cuerpo vacío o que no es JSON */
   }
   if (!response.ok) {
     if (response.status === 401 && !OWN_401.includes(path.split('?')[0])) unauthorizedHandler?.();
-    // Keep the whole payload: 422 rules carry `motivos: [{codigo, mensaje}]` (and any extra field).
+    // Se conserva todo el payload: los 422 de reglas traen `motivos: [{codigo, mensaje}]` (y cualquier campo extra).
     const error = new Error(data?.error || `Error del servidor (${response.status}).`);
     error.status = response.status;
     error.data = data;

@@ -1,13 +1,13 @@
-"""Sesion por cookie y decoradores de acceso."""
+"""Sesión por cookie y decoradores de acceso."""
 from functools import wraps
 
 from flask import g, session
 
-from .errors import ApiError
+from .excepciones import ApiError
 
 
 def start_session(id_usuario):
-    """Inicia sesion autenticada: limpia la sesion previa, guarda `uid` y la hace permanente."""
+    """Inicia sesión autenticada: limpia la sesión previa, guarda `uid` y la hace permanente."""
     session.clear()
     session["uid"] = id_usuario
     session.permanent = True
@@ -15,7 +15,7 @@ def start_session(id_usuario):
 
 
 def start_visitor_session():
-    """Inicia sesion de visitante (sin usuario en BD): limpia la previa y marca `visitante`."""
+    """Inicia sesión de visitante (sin usuario en BD): limpia la previa y marca `visitante`."""
     session.clear()
     session["visitante"] = True
     session.permanent = True
@@ -23,15 +23,15 @@ def start_visitor_session():
 
 
 def end_session():
-    """Cierra la sesion y descarta el usuario cacheado en `g`."""
+    """Cierra la sesión y descarta el usuario cacheado en `g`."""
     session.clear()
     g.pop("user", None)
 
 
 def current_user():
-    """Usuario de la sesion (dict con `permisos`) o None; se resuelve una vez por peticion y se cachea en `g`."""
+    """Usuario de la sesión (dict con `permisos`) o None; se resuelve una vez por petición y se cachea en `g`."""
     if "user" not in g:
-        from app.modules.auth import service  # import tardio: evita ciclos
+        from app.modules.auth import service  # import tardío: evita ciclos
 
         g.user = service.user_from_session(session)
     return g.user
@@ -51,7 +51,7 @@ def require_login():
 
 
 def require_permission(permiso, user=None):
-    """Lanza 401 sin sesion o 403 sin `permiso`; devuelve el usuario."""
+    """Lanza 401 sin sesión o 403 sin `permiso`; devuelve el usuario."""
     user = user or require_login()
     if permiso not in user["permisos"]:
         raise ApiError("No tienes permiso para realizar esta acción.", 403)
@@ -59,10 +59,10 @@ def require_permission(permiso, user=None):
 
 
 def login_required(fn):
-    """Decorador: exige sesion (401 via `require_login`) antes de ejecutar la vista `fn`."""
+    """Decorador: exige sesión (401 vía `require_login`) antes de ejecutar la vista `fn`."""
     @wraps(fn)
     def wrapper(*a, **kw):
-        """Exige sesion y delega en la vista."""
+        """Exige sesión y delega en la vista."""
         require_login()
         return fn(*a, **kw)
 
@@ -70,13 +70,13 @@ def login_required(fn):
 
 
 def permission_required(permiso):
-    """Decorador de fabrica: exige sesion (401) y `permiso` (403) antes de ejecutar la vista.
+    """Decorador de fábrica: exige sesión (401) y `permiso` (403) antes de ejecutar la vista.
 
     Args:
         permiso: nombre del permiso requerido.
     """
     def deco(fn):
-        """Envuelve la vista `fn` con la verificacion de permiso."""
+        """Envuelve la vista `fn` con la verificación de permiso."""
         @wraps(fn)
         def wrapper(*a, **kw):
             """Exige el permiso y delega en la vista."""

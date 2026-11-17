@@ -9,7 +9,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from app.core import auth as core_auth
 from app.core.bitacora import log
 from app.core import notificaciones
-from app.core.errors import ApiError
+from app.core.excepciones import ApiError
 from app.core.validators import Str, validate
 
 from . import model

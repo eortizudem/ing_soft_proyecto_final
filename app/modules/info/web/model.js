@@ -65,6 +65,6 @@ export const MODULES = [
     items: ['Vista previa, PDF e impresión', 'Alumnos con adeudos, con aviso a Servicios Escolares', 'Indicadores (asistente, inventario, préstamos)', 'Errores del sistema'] },
   { title: 'Notificaciones', href: 'notificaciones', perm: 'notificaciones', button: 'Notificaciones', text: 'Avisos enviados (simulados): correo, WhatsApp, Servicios Escolares y Tesorería.',
     items: ['Lista del personal con filtros', 'Mis notificaciones (alumno y docente)', 'Avisos de entrega, libro reservado y multas'] },
-  { title: 'Asistente virtual', href: 'asistente', perm: 'asistente', button: 'Asistente', text: 'Preguntas frecuentes, búsqueda de libros y pasar la consulta a un bibliotecario.',
-    items: ['Horarios y política de préstamo', 'Búsqueda de libros y mis préstamos', 'Pasar a bibliotecario y opinión (¿te ayudó?)', 'Versión móvil'] },
+  { title: 'Asistente virtual', href: 'asistente', perm: 'asistente', button: 'Asistente', text: 'Asistente con IA local (con reglas como plan B): preguntas frecuentes, búsqueda de libros, tu estado y pasar la consulta a un bibliotecario.',
+    items: ['Respuestas con IA local y reglas como plan B', 'Horarios y política de préstamo', 'Búsqueda de libros y mis préstamos', 'Pasar a bibliotecario y opinión (¿te ayudó?)', 'Versión móvil'] },
 ];

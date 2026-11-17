@@ -11,7 +11,7 @@ from datetime import date
 from app.core import circulacion, consultas, espera, notificaciones
 from app.core.auth import require_permission
 from app.core.bitacora import audit
-from app.core.errors import ApiError, exigir, motivo
+from app.core.excepciones import ApiError, exigir, motivo
 from app.core.repo import or_404
 from app.core.serializers import nest
 from app.core.validators import Dec, Int, List, Str, validate
@@ -221,7 +221,7 @@ def recibo(id_prestamo):
 
     Returns:
         dict: `folio`, fechas, `usuario`, `libro` (con copia y ubicación), `dias_prestamo`,
-        `politica` y `notificaciones` enviadas.
+        `bibliotecario` (quien registró, o None), `politica` y `notificaciones` enviadas.
 
     Raises:
         ApiError: 404 si el préstamo o su política no existen.
@@ -236,7 +236,7 @@ def recibo(id_prestamo):
     return {"folio": folio, "fecha_prestamo": p["fecha_prestamo"], "fecha_vencimiento": p["fecha_vencimiento"],
             "usuario": p["usuario"], "libro": {**p["libro"], "numero_copia": p["numero_copia"],
                                                 "ubicacion": model.ubicacion_libro(p["libro"]["id_libro"])},
-            "dias_prestamo": p["dias_prestamo"],
+            "dias_prestamo": p["dias_prestamo"], "bibliotecario": model.bibliotecario_de(p["folio"]),
             "politica": {"max_renovaciones": pol["max_renovaciones"], "multa_diaria": pol["multa_diaria"]},
             "notificaciones": avisos}
 

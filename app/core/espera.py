@@ -1,11 +1,11 @@
-"""Lista de espera: avance de la fila (D-19). Prestamos (devolucion), adeudos (dano que libera el ejemplar) y el
-barrido de espera llaman a ESTA funcion; ningun modulo reimplementa el reservado ni el aviso."""
+"""Lista de espera: avance de la fila (D-19). Préstamos (devolución), adeudos (daño que libera el ejemplar) y el
+barrido de espera llaman a ESTA función; ningún módulo reimplementa el reservado ni el aviso."""
 from datetime import datetime
 
 from . import circulacion, notificaciones, repo
 from .bitacora import log
 
-# Estados de lista_espera que aun ocupan lugar en la fila.
+# Estados de lista_espera que aún ocupan lugar en la fila.
 ACTIVOS = ("en_espera", "notificado")
 
 
@@ -19,7 +19,7 @@ def siguiente(id_libro):
 def notificar_espera(id_libro):
     """D-19: mientras sobren ejemplares disponibles sin apartar, el siguiente en espera pasa a 'notificado' con
     plazo (`limite_reserva`) y recibe un correo. Devuelve la lista `[{id_espera, id_usuario}]` notificada
-    (vacia si el libro no es prestable, no sobra ejemplar o nadie espera)."""
+    (vacía si el libro no es prestable, no sobra ejemplar o nadie espera)."""
     ctx = circulacion.contexto_libro(id_libro)
     libro = ctx["libro"]
     if libro["estado"] != "activo" or libro["tipo_uso"] != "prestamo_externo":

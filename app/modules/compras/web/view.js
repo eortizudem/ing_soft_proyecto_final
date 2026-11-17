@@ -4,7 +4,7 @@ import { page, btn, actions, cardList, itemCard, card, statusBadge, formField, f
   meter, notice, detailGrid, datetime, date, usd } from '/js/components/index.js';
 import { total, pending } from './model.js';
 
-// Monthly budget bar (RF-05, D-22).
+// Barra del presupuesto mensual (RF-05, D-22).
 /**
  * Barra del presupuesto mensual (RF-05, D-22).
  * @param {{mes: string, presupuesto_usd: number, usado_usd: number|string, disponible_usd: number}} b - Presupuesto de `GET /api/compras/presupuesto`.

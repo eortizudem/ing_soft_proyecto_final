@@ -2,7 +2,7 @@
 import { $, setFlash, toast } from '/js/core/ui.js';
 import { go } from '/js/core/router.js';
 import { can } from '/js/core/session.js';
-import { appendChat, bindChat, bindForm, onAction } from '/js/components/index.js';
+import { appendChat, bindChat, chatTyping, bindForm, onAction } from '/js/components/index.js';
 import { listPage } from '/js/core/crud.js';
 import * as model from './model.js';
 import * as view from './view.js';
@@ -41,13 +41,15 @@ async function history() {
 async function chat(params, ctx) {
   const mobile = !!ctx.mobile;
   const messages = await history();
-  const main = ctx.render(view.chatPage({ suggestions: model.SUGGESTIONS, staff: can('prestamos'), mobile, messages }));
+  const estado = await model.estado().catch(() => ({ ia: false, modelo: null }));   // sin respuesta: se muestra "Modo básico"
+  const main = ctx.render(view.chatPage({ suggestions: model.SUGGESTIONS, staff: can('prestamos'), mobile, messages, estado }));
   if (!main) return;
   const form = $('#chat', main);
-  /** Envía un mensaje, pinta la burbuja del usuario y la respuesta, y recuerda la conversación. @param {string} texto - mensaje. @returns {Promise<void>} */
+  /** Envía un mensaje, pinta la burbuja del usuario, "Escribiendo…" y la respuesta, y recuerda la conversación. @param {string} texto - mensaje. @returns {Promise<void>} */
   const send = async (texto) => {
     appendChat('chat', view.bubble({ texto }, 'usuario'), main);
-    const r = await model.send(texto, state.id, mobile ? 'movil' : 'web');
+    const quitar = chatTyping('chat', main);
+    const r = await model.send(texto, state.id, mobile ? 'movil' : 'web').finally(quitar);
     state.id = r.id_conversacion;
     appendChat('chat', view.bubble(r.respuesta, 'asistente'), main);
   };

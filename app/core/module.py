@@ -1,4 +1,4 @@
-"""Registro de modulos: cada app/modules/<m>/__init__.py solo declara `bp = make_blueprint(__name__)`."""
+"""Registro de módulos: cada app/modules/<m>/__init__.py solo declara `bp = make_blueprint(__name__)`."""
 import importlib
 import os
 
@@ -6,7 +6,7 @@ from flask import Blueprint
 
 
 def make_blueprint(import_name):
-    """Blueprint con nombre del modulo y estaticos del frontend en /m/<modulo>."""
+    """Blueprint con nombre del módulo y estáticos del frontend en /m/<módulo>."""
     name = import_name.rsplit(".", 1)[-1]
     return Blueprint(name, import_name, static_folder="web", static_url_path=f"/m/{name}")
 

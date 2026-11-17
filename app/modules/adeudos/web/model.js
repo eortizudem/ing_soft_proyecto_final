@@ -44,11 +44,11 @@ export const pay = (n, data) => api.post(`/adeudos/${id(n)}/pago`, {
  */
 export const cancelFine = (n, motivo) => api.post(`/adeudos/${id(n)}/cancelar`, { motivo });
 /**
- * GET /api/tipo-cambio — tipo de cambio USD/MXN simulado.
+ * GET /api/tipo_cambio — tipo de cambio USD/MXN simulado.
  * @returns {Promise<Object>} `{ usd_mxn, fuente, nota }`.
  */
-export const exchangeRate = () => api.get('/tipo-cambio');
-// Loan data + computed amounts (replacement value, damage amount) for confirmation screens.
+export const exchangeRate = () => api.get('/tipo_cambio');
+// Datos del préstamo y montos calculados (valor de reposición, monto por daño) para las pantallas de confirmación.
 /**
  * GET /api/adeudos/prestamo/:id — datos del préstamo y montos calculados (reposición, daño) sin escribir.
  * @param {string|number} loan - Id del préstamo.

@@ -14,7 +14,7 @@ def _count():
     return sql("SELECT count(*) AS n FROM reporte_generado")[0]["n"]
 
 
-def test_catalogo_report_logged(catalogo):
+def test_reporte_de_catalogo_queda_en_bitacora(catalogo):
     """El reporte de catálogo devuelve columnas/filas consistentes y se registra en tabla y bitácora."""
     n = _count()
     r = catalogo.get("/api/reportes/catalogo_activo?formato=pdf")
@@ -28,14 +28,14 @@ def test_catalogo_report_logged(catalogo):
     assert sql("SELECT 1 FROM bitacora WHERE accion='reporte' LIMIT 1")
 
 
-def test_usuarios_report_needs_usuarios_permission(catalogo, admin):
+def test_reporte_de_usuarios_exige_permiso_usuarios(catalogo, admin):
     """El reporte de usuarios exige además el permiso `usuarios`."""
     assert catalogo.get("/api/reportes/usuarios").status_code == 403
     j = admin.get("/api/reportes/usuarios").get_json()
     assert j["columnas"][0] == "Matrícula" and j["total"] >= 7
 
 
-def test_circulacion_reports_need_prestamos_permission(catalogo, bibliotecario):
+def test_reportes_de_circulacion_exigen_permiso_prestamos(catalogo, bibliotecario):
     """Los reportes de circulación exigen el permiso `prestamos`."""
     for tipo in ("con_adeudos", "prestamos_vencidos", "prestamos"):
         assert catalogo.get(f"/api/reportes/{tipo}").status_code == 403, tipo
@@ -43,7 +43,7 @@ def test_circulacion_reports_need_prestamos_permission(catalogo, bibliotecario):
     assert catalogo.get("/api/reportes/catalogo_completo").status_code == 200
 
 
-def test_report_permissions_and_errors(alumno, comprador, admin):
+def test_permisos_y_errores_de_reportes(alumno, comprador, admin):
     """Sin permiso `reportes` 403; tipo desconocido 404; formato inválido 400; éxito se registra."""
     assert alumno.get("/api/reportes/catalogo_completo").status_code == 403
     assert comprador.get("/api/reportes/catalogo_completo").status_code == 403
@@ -218,8 +218,8 @@ def test_indicadores_sin_permiso_reportes(alumno, comprador):
 
 def test_reporte_de_errores(admin, anon):
     """El reporte de errores muestra errores del cliente, filtra por fecha y se registra."""
-    from app.core import errores
-    errores.reiniciar_limites()
+    from app.core import bitacora_errores
+    bitacora_errores.reiniciar_limites()
     marca = "falla-" + uniq()
     anon.post("/api/errores", json={"mensaje": marca, "ruta": "/inicio", "origen": "app.js:3"})
     j = admin.get("/api/reportes/errores").get_json()

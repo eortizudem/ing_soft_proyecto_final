@@ -6,10 +6,15 @@ import { api, query } from '/js/core/api.js';
  * @param {string} texto - mensaje del usuario (1-500 caracteres).
  * @param {number|null} [idConversacion] - conversación activa; vacío abre una nueva.
  * @param {string} [canal='web'] - `web` o `movil`.
- * @returns {Promise<{id_conversacion: number, respuesta: {texto: string, intencion: string, con_bibliotecario: boolean, libros?: Array<object>, enlaces?: Array<{texto: string, ruta: string}>}}>}
+ * @returns {Promise<{id_conversacion: number, respuesta: {texto: string, intencion: string, con_bibliotecario: boolean, fuente: 'ia'|'reglas', libros?: Array<object>, enlaces?: Array<{texto: string, ruta: string}>}}>}
  */
 export const send = (texto, idConversacion, canal = 'web') =>
   api.post('/asistente/mensajes', { texto, id_conversacion: idConversacion || undefined, canal });
+/**
+ * Consulta si el asistente responde con IA (GET /api/asistente/estado).
+ * @returns {Promise<{ia: boolean, modelo: string|null}>} `ia` verdadero si el modelo está disponible.
+ */
+export const estado = () => api.get('/asistente/estado');
 /**
  * Obtiene una conversación con sus mensajes (GET /api/asistente/conversaciones/:id).
  * @param {number|string} id - id de la conversación.

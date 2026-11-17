@@ -7,13 +7,13 @@ Cubren permisos, alta/edición/stock, validación, visibilidad de inactivos, bú
 from app.testing import libro_payload, make_loan, sql, user_payload
 
 
-def test_permissions(alumno, anon):
+def test_permisos(alumno, anon):
     """Escribir requiere permiso `catalogo` (403) y listar requiere sesión (401)."""
     assert alumno.post("/api/libros", json=libro_payload()).status_code == 403
     assert anon.get("/api/libros").status_code == 401
 
 
-def test_seed_books(alumno):
+def test_libros_semilla(alumno):
     """Los libros semilla exponen existencias, disponibilidad, ubicación, precio y tipo de uso correctos."""
     libros = alumno.get("/api/libros").get_json()
     claves = {b["clave"]: b for b in libros}
@@ -25,7 +25,7 @@ def test_seed_books(alumno):
     assert claves["LIB003"]["tipo_uso"] == "consulta_interna"
 
 
-def test_create_update_stock(admin):
+def test_alta_edicion_y_existencias(admin):
     """Crear libro genera ejemplares; editar `ejemplares` agrega o da de baja copias disponibles."""
     r = admin.post("/api/libros", json=libro_payload(ejemplares=3, librero=7))
     assert r.status_code == 201
@@ -38,7 +38,7 @@ def test_create_update_stock(admin):
     assert j["ejemplares"] == 2 and j["disponibles"] == 2
 
 
-def test_validation(admin):
+def test_validaciones(admin):
     """Clave duplicada y campos fuera de rango o inválidos responden 400 con mensaje."""
     ok = admin.post("/api/libros", json=libro_payload()).get_json()
     assert admin.post("/api/libros", json=libro_payload(clave=ok["clave"])).status_code == 400
@@ -49,7 +49,7 @@ def test_validation(admin):
         assert r.status_code == 400 and r.get_json()["error"], bad
 
 
-def test_stock_below_prestados_and_toggle_with_loans(admin):
+def test_existencias_menores_a_prestados_y_cambio_de_estado_con_prestamos(admin):
     """No se puede bajar `ejemplares` por debajo de los prestados ni inactivar un libro con préstamos activos."""
     u = admin.post("/api/usuarios", json=user_payload()).get_json()
     p = libro_payload(ejemplares=3)
@@ -62,23 +62,23 @@ def test_stock_below_prestados_and_toggle_with_loans(admin):
     assert r.status_code == 400 and "prestadas" in r.get_json()["error"]
     j = admin.put(f"/api/libros/{b['id_libro']}", json={**p, "ejemplares": 2}).get_json()
     assert j["ejemplares"] == 2 and j["prestados"] == 2 and j["disponibles"] == 0
-    r = admin.post(f"/api/libros/{b['id_libro']}/toggle")
+    r = admin.post(f"/api/libros/{b['id_libro']}/estado")
     assert r.status_code == 400 and "préstamos activos" in r.get_json()["error"]
     assert admin.put(f"/api/libros/{b['id_libro']}", json={**p, "ejemplares": 2, "estado": "inactivo"}).status_code == 400
 
 
-def test_toggle_and_visibility(admin, alumno):
+def test_cambio_de_estado_y_visibilidad(admin, alumno):
     """Inactivar oculta el libro al alumno (404/lista) pero lo deja visible al admin; reactivar lo restaura."""
     b = admin.post("/api/libros", json=libro_payload()).get_json()
-    j = admin.post(f"/api/libros/{b['id_libro']}/toggle").get_json()
+    j = admin.post(f"/api/libros/{b['id_libro']}/estado").get_json()
     assert j["estado"] == "inactivo" and j["disponibles"] == 0 and j["ejemplares"] == 3
     assert b["clave"] in [x["clave"] for x in admin.get("/api/libros?estado=inactivo").get_json()]
     assert b["clave"] not in [x["clave"] for x in alumno.get("/api/libros").get_json()]
     assert alumno.get(f"/api/libros/{b['id_libro']}").status_code == 404
-    assert admin.post(f"/api/libros/{b['id_libro']}/toggle").get_json()["estado"] == "activo"
+    assert admin.post(f"/api/libros/{b['id_libro']}/estado").get_json()["estado"] == "activo"
 
 
-def test_accent_insensitive_search(alumno):
+def test_busqueda_sin_acentos(alumno):
     """La búsqueda `q` ignora acentos y mayúsculas, y trata `%` como texto literal."""
     def claves(q):
         return [b["clave"] for b in alumno.get("/api/libros", query_string={"q": q}).get_json()]
@@ -92,7 +92,7 @@ def test_accent_insensitive_search(alumno):
     assert claves("100%") == []
 
 
-def test_filters_and_temas(alumno):
+def test_filtros_y_temas(alumno):
     """`/api/temas`, filtro por tema y `disponibles=1` devuelven resultados coherentes."""
     assert "Literatura" in alumno.get("/api/temas").get_json()
     lit = alumno.get("/api/libros?tema=Literatura").get_json()
@@ -165,9 +165,9 @@ def test_reactivar_con_libro_inactivo_y_baja_masiva_conserva_motivo(admin):
     b = _libro(admin, ejemplares=3)
     ej = _ejemplares(admin, b)
     admin.post(f"/api/ejemplares/{ej[0]['id_ejemplar']}/baja", json={"motivo": "robado"})
-    admin.post(f"/api/libros/{b['id_libro']}/toggle")
+    admin.post(f"/api/libros/{b['id_libro']}/estado")
     assert admin.post(f"/api/ejemplares/{ej[0]['id_ejemplar']}/reactivar", json={}).status_code == 409
-    admin.post(f"/api/libros/{b['id_libro']}/toggle")
+    admin.post(f"/api/libros/{b['id_libro']}/estado")
     admin.put(f"/api/libros/{b['id_libro']}", json=libro_payload(clave=b["clave"], ejemplares=1))
     bajas = [e for e in _ejemplares(admin, b) if e["estado"] == "baja"]
     assert len(bajas) == 2 and all(e["motivo_baja"] for e in bajas)

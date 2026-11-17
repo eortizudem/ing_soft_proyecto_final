@@ -41,10 +41,10 @@ def actualizar(id_usuario):
     return service.actualizar(id_usuario, body(), current_user())
 
 
-@bp.post("/api/usuarios/<int:id_usuario>/toggle")
+@bp.post("/api/usuarios/<int:id_usuario>/estado")
 @permission_required("usuarios")
-def toggle(id_usuario):
-    """POST /api/usuarios/<id_usuario>/toggle — da de baja o reactiva. Respuesta: cuenta actualizada.
+def alternar(id_usuario):
+    """POST /api/usuarios/<id_usuario>/estado — da de baja o reactiva. Respuesta: cuenta actualizada.
     Errores: 400 (baja con préstamos/multas, cuenta propia, último admin), 404.
     """
     return service.alternar(id_usuario, current_user())

@@ -1,14 +1,14 @@
-"""Validacion declarativa: esquemas de campos -> dict limpio o ApiError (mensajes en espanol).
+"""Validación declarativa: esquemas de campos -> dict limpio o ApiError (mensajes en español).
 
-    SCHEMA = {"nombre": Str("nombre completo", max=120), "edad": Int(0, 120, msg="Edad invalida.")}
-    data = validate(body, SCHEMA)              # limpia y valida; solo devuelve claves del esquema
+    SCHEMA = {"nombre": Str("nombre completo", max=120), "edad": Int(0, 120, msg="Edad inválida.")}
+    data = validate(body, SCHEMA)              # limpia y válida; solo devuelve claves del esquema
     data = validate(body, SCHEMA, partial=True)  # PATCH: omite las claves ausentes
 """
 import re
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 
-from .errors import ApiError
+from .excepciones import ApiError
 
 CODE_RE = re.compile(r"^[A-Z0-9-]{3,10}$")
 EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
@@ -27,20 +27,20 @@ class Field:
 
         Args:
             label: nombre legible del campo para los mensajes (por defecto, la clave del esquema).
-            required: si falta o esta vacio, falla.
+            required: si falta o está vacío, falla.
             default: valor devuelto cuando no es requerido y falta.
-            msg: mensaje de error unico del campo.
-            status: codigo HTTP del ApiError.
+            msg: mensaje de error único del campo.
+            status: código HTTP del ApiError.
         """
         self.label, self.required, self.default, self.msg, self.status = label, required, default, msg, status
         self.name = label
 
     def fail(self, message=None):
-        """Lanza ApiError con `message`, o `msg` del campo, o un mensaje generico."""
+        """Lanza ApiError con `message`, o `msg` del campo, o un mensaje genérico."""
         raise ApiError(message or self.msg or "Dato no válido.", self.status)
 
     def is_blank(self, v):
-        """True si el valor cuenta como ausente (None o texto vacio)."""
+        """True si el valor cuenta como ausente (None o texto vacío)."""
         return _blank(v)
 
     def required_message(self):
@@ -48,14 +48,14 @@ class Field:
         return self.msg
 
     def run(self, value, name):
-        """Valida un valor: ausente -> error o `default`; presente -> `parse`.
+        """Válida un valor: ausente -> error o `default`; presente -> `parse`.
 
         Args:
             value: valor recibido.
             name: clave del campo en el esquema (se usa si no hay `label`).
 
         Raises:
-            ApiError: con `status` del campo si el valor no es valido.
+            ApiError: con `status` del campo si el valor no es válido.
         """
         self.name = self.label or name
         if self.is_blank(value):
@@ -65,7 +65,7 @@ class Field:
         return self.parse(value)
 
     def parse(self, value):  # pragma: no cover - lo implementan las subclases
-        """Convierte y valida `value`; las subclases lo sobrescriben."""
+        """Convierte y válida `value`; las subclases lo sobrescriben."""
         return value
 
 
@@ -78,12 +78,12 @@ class Str(Field):
 
         Args:
             label: nombre legible para los mensajes.
-            max: largo maximo.
-            min: largo minimo.
+            max: largo máximo.
+            min: largo mínimo.
             pattern: regex (str o compilada) que debe cumplir el texto; `pattern_msg` es su mensaje.
-            upper: convertir a mayusculas (o `lower` a minusculas).
+            upper: convertir a mayúsculas (o `lower` a minúsculas).
             strip: quitar espacios laterales.
-            strict: solo acepta `str` (rechaza numeros).
+            strict: solo acepta `str` (rechaza números).
             required_msg: mensaje cuando falta; `max_msg`/`min_msg` para el largo.
         """
         super().__init__(label, **kw)
@@ -92,7 +92,7 @@ class Str(Field):
         self.pattern_msg, self.required_msg, self.max_msg, self.min_msg = pattern_msg, required_msg, max_msg, min_msg
 
     def is_blank(self, v):
-        """Con `strip` (por defecto), el texto solo con espacios cuenta como vacio."""
+        """Con `strip` (por defecto), el texto solo con espacios cuenta como vacío."""
         return v is None or (isinstance(v, str) and not (v.strip() if self.strip else v))
 
     def required_message(self):
@@ -100,7 +100,7 @@ class Str(Field):
         return self.required_msg or f"Completa el campo {self.name}."
 
     def parse(self, value):
-        """Normaliza (strip/upper/lower) y valida largo y patron; devuelve el texto limpio."""
+        """Normaliza (strip/upper/lower) y válida largo y patron; devuelve el texto limpio."""
         if self.strict and not isinstance(value, str):
             self.fail(self.min_msg or self.required_message())
         text = str(value)
@@ -116,10 +116,10 @@ class Str(Field):
 
 
 class Email(Str):
-    """Correo en minusculas con formato basico usuario@dominio.ext."""
+    """Correo en minúsculas con formato básico usuario@dominio.ext."""
 
     def __init__(self, label="correo", *, max=120, msg="Introduce un correo válido.", **kw):
-        """Fija minusculas y el patron `EMAIL_RE`; `msg` es el mensaje de formato invalido."""
+        """Fija minúsculas y el patron `EMAIL_RE`; `msg` es el mensaje de formato inválido."""
         super().__init__(label, max=max, lower=True, pattern=EMAIL_RE, pattern_msg=msg, **kw)
 
 
@@ -130,14 +130,14 @@ class Int(Field):
         """Configura el rango del entero.
 
         Args:
-            min: valor minimo permitido (opcional).
-            max: valor maximo permitido (opcional).
+            min: valor mínimo permitido (opcional).
+            max: valor máximo permitido (opcional).
         """
         super().__init__(label, **kw)
         self.min, self.max = min, max
 
     def parse(self, value):
-        """Convierte a int (rechaza bool y floats no enteros) y valida el rango."""
+        """Convierte a int (rechaza bool y floats no enteros) y válida el rango."""
         if isinstance(value, bool):
             self.fail()
         try:
@@ -161,15 +161,15 @@ class Dec(Field):
         """Configura el rango y los decimales.
 
         Args:
-            min: valor minimo permitido (opcional).
-            max: valor maximo permitido (opcional).
+            min: valor mínimo permitido (opcional).
+            max: valor máximo permitido (opcional).
             places: decimales a los que se cuantiza el resultado (opcional).
         """
         super().__init__(label, **kw)
         self.min, self.max, self.places = min, max, places
 
     def parse(self, value):
-        """Convierte a Decimal finito (rechaza bool), valida el rango y cuantiza a `places`."""
+        """Convierte a Decimal finito (rechaza bool), válida el rango y cuantiza a `places`."""
         if isinstance(value, bool):
             self.fail()
         try:
@@ -182,13 +182,13 @@ class Dec(Field):
 
 
 class Enum(Field):
-    """Valor dentro de `values` (iterable o funcion que lo devuelve). Con `label`, vacio -> 'Completa...'."""
+    """Valor dentro de `values` (iterable o función que lo devuelve). Con `label`, vacío -> 'Completa...'."""
 
     def __init__(self, values, msg=None, label=None, **kw):
         """Configura los valores permitidos.
 
         Args:
-            values: iterable de valores permitidos o funcion sin argumentos que lo devuelve (p. ej. consulta a BD).
+            values: iterable de valores permitidos o función sin argumentos que lo devuelve (p. ej. consulta a BD).
         """
         super().__init__(label, msg=msg, **kw)
         self.values = values
@@ -198,7 +198,7 @@ class Enum(Field):
         return f"Completa el campo {self.label}." if self.label else self.msg
 
     def parse(self, value):
-        """Valida que el valor (sin espacios laterales si es texto) este en `values`."""
+        """Válida que el valor (sin espacios laterales si es texto) este en `values`."""
         allowed = self.values() if callable(self.values) else self.values
         value = value.strip() if isinstance(value, str) else value
         if value not in allowed:
@@ -210,11 +210,11 @@ class Bool(Field):
     """Booleano estricto (true/false JSON)."""
 
     def is_blank(self, v):
-        """Solo None cuenta como ausente (False es un valor valido)."""
+        """Solo None cuenta como ausente (False es un valor válido)."""
         return v is None
 
     def parse(self, value):
-        """Acepta unicamente booleanos JSON."""
+        """Acepta únicamente booleanos JSON."""
         if not isinstance(value, bool):
             self.fail()
         return value
@@ -227,14 +227,14 @@ class Date(Field):
         """Configura el rango de fechas.
 
         Args:
-            min: fecha minima permitida (date, opcional).
-            max: fecha maxima permitida (date, opcional).
+            min: fecha mínima permitida (date, opcional).
+            max: fecha máxima permitida (date, opcional).
         """
         super().__init__(label, **kw)
         self.min, self.max = min, max
 
     def parse(self, value):
-        """Convierte a `date` (ISO, date o datetime) y valida el rango."""
+        """Convierte a `date` (ISO, date o datetime) y válida el rango."""
         try:
             if isinstance(value, datetime):
                 d = value.date()
@@ -253,22 +253,22 @@ class List(Field):
     """Lista de objetos (item = esquema dict) o de valores (item = Field); min/max de elementos."""
 
     def __init__(self, item, min=0, max=None, label=None, **kw):
-        """Configura el tipo y tamano de la lista.
+        """Configura el tipo y tamaño de la lista.
 
         Args:
             item: esquema dict (lista de objetos) o `Field` (lista de valores).
-            min: minimo de elementos.
-            max: maximo de elementos (opcional).
+            min: mínimo de elementos.
+            max: máximo de elementos (opcional).
         """
         super().__init__(label, **kw)
         self.item, self.min, self.max = item, min, max
 
     def is_blank(self, v):
-        """Solo None cuenta como ausente (una lista vacia se valida contra `min`)."""
+        """Solo None cuenta como ausente (una lista vacía se válida contra `min`)."""
         return v is None
 
     def parse(self, value):
-        """Valida tipo y cantidad de elementos y cada elemento con `item`."""
+        """Válida tipo y cantidad de elementos y cada elemento con `item`."""
         if not isinstance(value, list) or len(value) < self.min or (self.max and len(value) > self.max):
             self.fail()
         out = []
@@ -286,12 +286,12 @@ def validate(data, schema, partial=False):
     """Aplica `schema` ({campo: Field}) a `data`; devuelve dict limpio o lanza ApiError (primer error).
 
     Args:
-        data: cuerpo recibido (si no es dict se trata como vacio).
+        data: cuerpo recibido (si no es dict se trata como vacío).
         schema: mapa nombre -> `Field`; solo esas claves llegan al resultado.
         partial: si True (PATCH) omite los campos ausentes en lugar de exigirlos.
 
     Raises:
-        ApiError: primer campo (en orden del esquema) que no valida.
+        ApiError: primer campo (en orden del esquema) que no válida.
     """
     data = data if isinstance(data, dict) else {}
     return {name: f.run(data.get(name), name) for name, f in schema.items() if not (partial and name not in data)}

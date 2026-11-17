@@ -7,7 +7,7 @@ import * as model from './model.js';
 import * as view from './view.js';
 
 /** Borrador en edición/revisión. */
-let draft = null; // request being edited/reviewed, kept between form and review pages
+let draft = null; // solicitud en edición o revisión; se conserva entre el formulario y la pantalla de revisión
 
 /**
  * Ruta `#/compras` (permiso `compras`): lista de solicitudes con barra de presupuesto.
@@ -19,7 +19,7 @@ async function list(params, ctx) {
   ctx.render(view.listPage(await model.list(), await model.budget()));
 }
 
-// Reads the lines currently in the form.
+// Lee las líneas que hay en el formulario.
 /**
  * Lee las líneas capturadas en el formulario.
  * @param {HTMLFormElement} form - Formulario de solicitud.
@@ -51,7 +51,7 @@ async function newRequest(params, ctx) {
   const refresh = () => {
     $('#total', main).textContent = view.totalText(readLines(form));
     $$('[data-action="remove-line"]', main).forEach((b) => { b.disabled = lines.children.length === 1; });
-    // Unique ids so every label points to its own input.
+    // Ids únicos para que cada etiqueta apunte a su propio campo.
     $$('.purchase-line', main).forEach((row, n) => $$('input', row).forEach((input) => {
       input.id = `${input.name}-${n}`;
       input.previousElementSibling.htmlFor = input.id;

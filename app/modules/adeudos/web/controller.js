@@ -90,7 +90,7 @@ async function pay(params, ctx) {
   });
 }
 
-// Loss / damage: show the computed amount, refresh it as the exchange rate or percentage change, confirm, submit.
+// Pérdida / daño: muestra el monto calculado, lo actualiza al cambiar el tipo de cambio o el porcentaje, confirma y envía.
 /**
  * Rutas de pérdida y daño: muestra el monto calculado, lo recalcula al cambiar el tipo de cambio o el porcentaje, confirma y registra.
  * @param {'perdida'|'danio'} kind - Tipo de incidente.
@@ -109,7 +109,7 @@ async function incident(kind, params, ctx) {
     try {
       preview = await model.preview(params.id, { [field]: value });
       $('#amounts', main).innerHTML = String(view.amounts(preview, kind));
-    } catch { /* an invalid intermediate value keeps the last computed amount */ }
+    } catch { /* un valor intermedio inválido conserva el último monto calculado */ }
   };
   form.elements[kind === 'perdida' ? 'tipo_cambio' : 'porcentaje'].addEventListener('change', refresh);
   bindForm(form, {

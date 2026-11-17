@@ -4,7 +4,7 @@ Fecha de corte de la re-evaluación: 2026-10-27 (tras implementar los Sprints 0-
 Las rutas de evidencia son relativas a la raíz del proyecto (`archivo:línea`).
 
 Leyenda de estado: ✅ Cumple · 🟡 Parcial · ❌ Falta · ⛔ No aplica (conflicto con una restricción del usuario o fuera del producto).
-Criterio de ✅: implementado en código, con prueba `pytest` (236 pruebas pasan) o evidencia directa. La verificación en navegador está en la sección 9 (E2E en Chrome, 2026-10-27).
+Criterio de ✅: implementado en código, con prueba `pytest` (la suite completa pasa) o evidencia directa. La verificación en navegador está en la sección 9 (E2E en Chrome, 2026-10-27).
 
 ## 0. Resumen
 
@@ -66,7 +66,7 @@ Consecuencias adicionales: ⛔ JWT (PS-S0-05, PS-TEC-06): se usa cookie de sesi�
 | D-10 | Flujo de pago de multas (A-30, RF-27) | El alumno paga en Tesorería y entrega el comprobante; el Bibliotecario registra el pago con una **referencia de Tesorería** obligatoria (se guarda en `bitacora.detalle`; `adeudo` no tiene columna) y fecha. Estado `pagado`. | Cumple RO-04.f/RO-06 sin tabla nueva. |
 | D-11 | Notificaciones externas (A-10 RF, PS-RIE-05) | **Avisos enviados (simulados)** en `bitacora` (`accion = 'notif_email' / 'notif_whatsapp' / 'notif_servicios_escolares' / 'notif_tesoreria'`, `detalle = "<destino>\|<asunto>: <cuerpo>"` truncado a 200). Se expone con UI en el módulo `notificaciones`. Interfaz única `app/core/notificaciones.py::enviar(...)` = adaptador intercambiable; correo es el canal mínimo; los canales de RF-19 (email, WhatsApp, impresión) son **opcionales y combinables** por el operador. | Satisface visibilidad (RNF-10/PS-S2-06) sin credenciales reales (PS-S4-08 fuera). |
 | D-12 | Rol "Colaborador" (A-2 RF, A-6 PS) | Se crea el perfil **`colaborador`** (dato semilla, no esquema): personal de apoyo con acceso a mantenimiento de libros (permisos `catalogo` + `compras`), búsqueda, reportes y asistente; **sin** préstamos. Los perfiles `catalogo` y `comprador` se conservan (RF-01). El `bibliotecario` recibe además `catalogo` (la matriz le da acceso a Mantenimiento de libros). | Cierra PS-S0-01 literal sin esquema nuevo; sigue la matriz del cliente. |
-| D-13 | Chatbot (PS-S3-07, A-15 PS) | **Asistente basado en reglas**: normaliza texto (minúsculas, sin acentos), detecta el tema de la pregunta (intención) por palabras clave (diccionario en `service.py`) y por similitud con `pregunta_frecuente`; consultas de estado propio por SQL (requiere sesión de usuario, no visitante); búsqueda de libros reutilizando SQL del catálogo; explicación de reglas leyendo `politica_prestamo`; **paso a bibliotecario**: crea una conversación pendiente (`conversacion.resuelta=false` + mensaje con intención `pasar_a_bibliotecario`) visible en una bandeja del bibliotecario; no hay SLA. Sin LLM. | Cumple "motor híbrido de intents + base de conocimiento" con las 4 tablas S3 existentes, sin dependencias externas (U2). |
+| D-13 | Chatbot (PS-S3-07, A-15 PS) | **Asistente híbrido (reglas + LLM local)**. Parte de reglas: normaliza texto (minúsculas, sin acentos), detecta el tema de la pregunta (intención) por palabras clave (diccionario en `service.py`) y por similitud con `pregunta_frecuente`; consultas de estado propio por SQL (requiere sesión de usuario, no visitante); búsqueda de libros reutilizando SQL del catálogo; explicación de reglas leyendo `politica_prestamo`; **paso a bibliotecario**: crea una conversación pendiente (`conversacion.resuelta=false` + mensaje con intención `pasar_a_bibliotecario`) visible en una bandeja del bibliotecario; no hay SLA. **Revisada (requisito del profesor): el asistente usa un LLM real y local con contexto de la base de datos.** Un contenedor `ollama` (imagen `ollama/ollama`) sirve el modelo `qwen2.5:1.5b` (~1 GB de descarga, ~1.4 GB de RAM, solo CPU; cambiable con `OLLAMA_MODEL`). Cada mensaje pasa primero por el flujo de reglas (intención, libros con disponibilidad y ubicación, política vigente, FAQ y, con sesión, solo los datos del propio usuario); ese resultado es el CONTEXTO del prompt y el modelo redacta la respuesta usando solo ese contexto (máx. 4 frases). Se descarta la respuesta si cita cifras o títulos que no están en el contexto. Plan B: con `ASISTENTE_IA=0`, Ollama caído, tiempo agotado (`OLLAMA_TIMEOUT`) o respuesta no respaldada, se responde con las reglas (`fuente: "reglas"`). El paso a bibliotecario, los saludos y lo que no se entiende siguen por reglas. Todas las llamadas al modelo pasan por `app/core/ia.py`. | Cumple "motor híbrido de intents + base de conocimiento" con las 4 tablas S3 existentes y un modelo local sin servicios externos (U2). Evidencia: `app/core/ia.py:29-146`, `asistente/service.py:502-675` (contexto, historial, plan B, `_redactar`), `docker-compose.yml:71-88`; modelos comparados en `docs/operacion.md`. |
 | D-14 | Respaldo/restauración (A-11 RF, PS-S0-06) | `scripts/respaldo.py` (`pg_dump -Fc` vía `docker compose exec db`) y `scripts/restaurar.py` (`pg_restore`), con `--verificar` que restaura en una BD temporal y compara conteos (la "prueba documentada"). RPO 24 h (respaldo diario programado con cron/Programador de tareas, documentado), RTO 30 min. | Sin RPO/RTO en la fuente; valores razonables para el alcance. |
 | D-15 | Tiempo de respuesta ≤ 3 s (A-11 RF, A-12 PS) | Percentil 95 ≤ 3 s por endpoint con el dataset demo ampliado (≥ 5 000 usuarios, ≥ 10 000 ejemplares, ≥ 20 000 préstamos), un usuario a la vez más prueba de 20 solicitudes concurrentes. Medido con `scripts/medir_rendimiento.py`. | Fuente sin carga ni percentil. |
 | D-16 | Accesibilidad (A-12 RF, PS-S1-10) | Objetivo **WCAG 2.1 AA (criterios básicos)**: contraste ≥ 4.5:1, foco visible, navegación completa por teclado, etiquetas en todos los campos, `aria-live` para mensajes, `lang="es"`, saltar al contenido. Checklist manual + revisión estática. | La propuesta lo cita como "referencia"; se adopta AA básico como criterio verificable. |
@@ -100,7 +100,7 @@ Evidencia re-evaluada contra el código actual. "Falta" indica solo lo que sigue
 | RN-01 | Autorización de préstamo (sin multas, ≤ límite, sin vencidos; libro disponible y préstamo externo) | ✅ | `core/circulacion.py:77-104` (`evaluar_prestamo`), `:188-203`; `prestamos/service.py:89-107,148-166`; pruebas `prestamos/tests/test_prestamos.py:88-139` | — | RF-17, RF-18, RNF-09, PS-S2-01 |
 | RN-02 | Renovación (según vencimiento, ≤ 2 renovaciones alumno) | ✅ | `core/circulacion.py:107-126,204-227`; `prestamos/service.py:171-177`; pruebas `test_prestamos.py:241,259` | — | RF-21, PS-S2-04 |
 | RN-03 | Multa $10 por día de retraso (alumno y profesor) | ✅ | `core/circulacion.py:62-69`; adeudo al devolver `prestamos/service.py:182-197`; semilla `db/02_seed.sql:61-65`; pruebas `test_prestamos.py:297-322` | — | RF-25, PS-S2-09 |
-| RN-04 | Reposición por pérdida = última compra USD × tipo de cambio | ✅ | `core/circulacion.py:134-137,230-242`; `adeudos/service.py:122-139`; `GET /api/tipo-cambio` `adeudos/controller.py:66`; `core/parametros.py:13` | — | RF-25, RF-26 |
+| RN-04 | Reposición por pérdida = última compra USD × tipo de cambio | ✅ | `core/circulacion.py:134-137,230-242`; `adeudos/service.py:122-139`; `GET /api/tipo_cambio` `adeudos/controller.py:66`; `core/parametros.py:13` | — | RF-25, RF-26 |
 | RN-05 | Vigencia alumno 5 días hábiles | ✅ | `core/calendario.py:13-45`; `core/circulacion.py:57-59`; política `db/02_seed.sql:61-65`; prueba `test_prestamos.py:156-166` | — | RF-20, PS-S2-03 |
 | RN-06 | Docentes: 3 renovaciones, multa $10, 10 días hábiles | ✅ | Política docente `db/02_seed.sql:61-65`; `evaluar_renovacion` `core/circulacion.py:107`; prueba `test_prestamos.py:241` | — | RF-20, RF-21 |
 | RO-01 | Administrador de Biblioteca | ✅ | Perfil `admin` con los 15 permisos `db/02_seed.sql:17-23` | — | RF-01 |
@@ -147,11 +147,11 @@ Evidencia re-evaluada contra el código actual. "Falta" indica solo lo que sigue
 | RF-26 | Aviso automático a Servicios Escolares y Tesorería por pérdida | ✅ | `adeudos/service.py:134-135` (canales `servicios_escolares` y `tesoreria`) | Simulado (D-11) | PS-S2-10, PS-S2-12 |
 | RF-27 | Registro de pago de multa | ✅ | `POST /api/adeudos/<id>/pago` `adeudos/service.py:90-103` (referencia 3-40, bitácora `adeudo_pago`); cancelar `:106-114` | — | PS-S2-11 |
 | RF-28 | Lista de alumnos con adeudos en época de exámenes y aviso a Servicios Escolares | ✅ | `reportes/service.py:31-37,45-49,96-106`; botón `reportes/web/view.js:39`; `POST /api/reportes/con_adeudos/aviso` `reportes/controller.py:15` | — | PS-S2-10 |
-| RF-29 | Chatbot: consultas frecuentes (horarios, políticas, ubicación, disponibilidad) | ✅ | `asistente/service.py:116-135` (intenciones + FAQ), `:162-169`; 16 intenciones y 11+ FAQ `db/02_seed.sql:67-100` | — | PS-S3-01 |
-| RF-30 | Chatbot: apoyo en búsqueda de libros | ✅ | `asistente/service.py:137-145,246-256,266-272` (máx. 5, con disponibilidad y ubicación) | — | PS-S3-02 |
-| RF-31 | Chatbot: estatus propio de préstamos, renovaciones, multas | ✅ | `asistente/service.py:211-245,273-279` (visitante: pide iniciar sesión) | — | PS-S3-03 |
+| RF-29 | Chatbot: consultas frecuentes (horarios, políticas, ubicación, disponibilidad) | ✅ | `asistente/service.py:116-135` (intenciones + FAQ), `:162-169`; respuesta redactada por LLM local con FAQ y datos como contexto `service.py:530-563,616-660`, `core/ia.py:133-160`; 16 intenciones y 11+ FAQ `db/02_seed.sql:67-100` | — | PS-S3-01 |
+| RF-30 | Chatbot: apoyo en búsqueda de libros | ✅ | `asistente/service.py:137-145,246-256,266-272` (máx. 5, con disponibilidad y ubicación; van al contexto del LLM `:536-541` y la lista sigue saliendo de la base) | — | PS-S3-02 |
+| RF-31 | Chatbot: estatus propio de préstamos, renovaciones, multas | ✅ | `asistente/service.py:211-245,273-279` (visitante: pide iniciar sesión); al LLM solo van los datos del usuario con sesión `:502-527`, prueba `test_solo_datos_propios` | — | PS-S3-03 |
 | RF-32 | Chatbot: explicación de reglas | ✅ | `asistente/service.py:170-210` (lee `politica_prestamo`) | — | PS-S3-04 |
-| RF-33 | Pasar la consulta a un Bibliotecario | ✅ | `asistente/service.py:257-264,356-374`; pantalla `asistente/web/controller.js:68-69`; `GET/POST /api/asistente/consultas` `asistente/controller.py:25-31` | — | PS-S3-05 |
+| RF-33 | Pasar la consulta a un Bibliotecario | ✅ | `asistente/service.py:257-264,356-374` (siempre por reglas, nunca por el modelo: `SOLO_REGLAS`, prueba `test_escalamiento_por_reglas`); pantalla `asistente/web/controller.js:68-69`; `GET/POST /api/asistente/consultas` `asistente/controller.py:25-31` | — | PS-S3-05 |
 
 ### 3.3 Requerimientos no funcionales (RNF)
 
@@ -168,8 +168,8 @@ Evidencia re-evaluada contra el código actual. "Falta" indica solo lo que sigue
 | RNF-09 | Validación automática (Reglas 1, 2, 5, 6) | ✅ | `core/circulacion.py:77-126,188-227` única fuente; la usan prestamos, espera, adeudos, asistente | — | RN-01, RN-02, RN-05, RN-06 |
 | RNF-10 | Notificación de estatus del préstamo (email/WhatsApp) | ✅ | `core/notificaciones.py:22-40`; recibo `prestamos/service.py:128-142`; lista de avisosja `notificaciones/service.py:18-27`, UI "Simulado" `notificaciones/web/view.js:34` | Simulado (D-11) | PS-S2-06 |
 | RNF-11 | ≤ 3 s en préstamos/devoluciones | ✅ | `medir_rendimiento.py:127-175` (`--escritura`: crear, renovar, devolver, pagar): p95 0.064 / 0.052 / 0.042 / 0.042 s con el dataset de volumen; listado `prestamos` 0.053 s (0.425 s con 20 concurrentes) | — | PS-NFR-01 |
-| RNF-12 | Disponibilidad 24/7 del chatbot | ✅ | `restart: unless-stopped` `docker-compose.yml:4,23`; healthchecks `:13-18,36-41`, `Dockerfile:9`; `GET /api/health` `info/controller.py:9` | — | PS-S3-06, PS-NFR-02 |
-| RNF-13 | ≤ 3 s en chatbot | ✅ | `asistente/mensajes` p95 0.033 s (0.223 s con 20 concurrentes) con el dataset de volumen; sin llamadas externas | — | PS-NFR-01 |
+| RNF-12 | Disponibilidad 24/7 del chatbot | ✅ | `restart: unless-stopped` `docker-compose.yml:6,31,73` (incluye `ollama`); si la IA falla, plan B por reglas `asistente/service.py:580-595,654-660` (`fuente: "reglas"`); healthchecks `:13-18,36-41`, `Dockerfile:9`; `GET /api/health` `info/controller.py:9` | — | PS-S3-06, PS-NFR-02 |
+| RNF-13 | ≤ 3 s en chatbot | 🟡 | Con el modelo local (`qwen2.5:1.5b`, 10 núcleos, CPU; comparación de 6 modelos en `docs/operacion.md` 3.2): 24 preguntas con el modelo ya cargado, mediana 0.98 s, p95 1.59 s, máx. 1.88 s (✅); la primera pregunta con el modelo frío tarda ~3-3.5 s (por eso `levantar.py` lo precalienta y `keep_alive` lo deja 10 min en memoria). En un equipo con menos núcleos puede superar 3 s; si el modelo no responde en `OLLAMA_TIMEOUT` (20 s) se usan las reglas (0.03 s). Mediciones en `docs/operacion.md` | Equipos de 2-4 núcleos no medidos; indicador "Escribiendo…" `chat.js` `chatTyping` | PS-NFR-01 |
 | RNF-14 | Integración multiplataforma (Web y App) del chatbot | ✅ | Ruta móvil `asistente/web/controller.js:67`; canal `movil` `db/01_schema.sql:228`, `asistente/service.py:28` | App nativa ⛔ (U7) | PS-S3-09 |
 
 ### 3.4 Propuesta por sprint (PS)
@@ -231,9 +231,9 @@ Evidencia re-evaluada contra el código actual. "Falta" indica solo lo que sigue
 | PS-S2-15 | Precondición: matriz de reglas validada | 🟡 | Sección 2; hoja de firma `docs/requisitos/decisiones_para_validacion.md` | Firma del PO | PS-S0-08 |
 | PS-S3-01 | FAQ | ✅ | `info/controller.py:4`, FAQ en el asistente `asistente/service.py:162-169` | — | — |
 | PS-S3-02..05 | Búsqueda, estatus, reglas, paso a bibliotecario | ✅ | Ver RF-30..33 | — | — |
-| PS-S3-06 | 24/7 con monitoreo y reinicio automático | ✅ | Reinicio y healthchecks `docker-compose.yml`; errores: 500 del servidor `core/errors.py:43-48`, errores JS `web/js/core/errores.js` + `POST /api/errores` `modules/errores/controller.py`, almacenamiento y límite `core/errores.py:32-60`, vista Reportes → Errores `reportes/service.py:73-79`; pruebas `errores/tests/test_errores.py` (7) | — | RNF-12 |
+| PS-S3-06 | 24/7 con monitoreo y reinicio automático | ✅ | Reinicio y healthchecks `docker-compose.yml`; errores: 500 del servidor `core/excepciones.py:43-48`, errores JS `web/js/core/errores.js` + `POST /api/errores` `modules/errores/controller.py`, almacenamiento y límite `core/bitacora_errores.py`, vista Reportes → Errores `reportes/service.py:73-79`; pruebas `errores/tests/test_errores.py` (7) | — | RNF-12 |
 | PS-S3-07 | Motor híbrido de intents + base de conocimiento | ✅ | `asistente/service.py:50-135` (palabras clave + similitud Dice con FAQ); tablas `db/01_schema.sql:218-255` | — | — |
-| PS-S4-01 | Regresión | ✅ | 219 pruebas `pytest` (`pytest.ini`, `app/core/tests/`, `app/modules/*/tests/`) | — | todos |
+| PS-S4-01 | Regresión | ✅ | pruebas `pytest` (`pytest.ini`, `app/core/tests/`, `app/modules/*/tests/`) | — | todos |
 | PS-S4-02 | UAT | 🟡 | Guion formal por rol `docs/uat.md` (58 casos, resultados del E2E 2026-10-27) | Ejecución y firma de usuarios reales | — |
 | PS-S4-03 | Seguridad (TLS, registros de acceso, permisos) | 🟡 | Registros `bitacora`; permisos en servidor `core/auth.py`; gunicorn `--access-logfile` `Dockerfile:12`; token de recuperación tras `DEMO_MOSTRAR_TOKEN` `config.py:31`, `auth/controller.py:33-35`; cookie `Secure` con `HTTPS` `config.py:19`; TLS por proxy documentado `docs/operacion.md` sección 7 | TLS no se despliega aquí (proxy inverso, fuera de alcance) | PS-NFR-05 |
 | PS-S4-04 | Rendimiento | ✅ | `scripts/medir_rendimiento.py` (lecturas y `--escritura`), `scripts/cargar_datos_volumen.py`; resultados `docs/operacion.md` sección 3 | — | RNF-03 |
@@ -271,21 +271,21 @@ PS-META-01..07, PS-GEN-04/05/08 (duración, capacidad, inversión, objetivos de 
 
 ## 5. Contratos transversales y paquete P0 (fundación) — **P0 COMPLETADO**
 
-> **Estado de ejecución (secciones 5 a 8): EJECUTADO.** P0 y los paquetes A, B, C, D, E1, E2, F, G y H están implementados y con pruebas (219 pasan); la integración (I) quedó parcial: `README.md` e `info/web/view.js` (Guía y Funciones) por completar. La sección 5 documenta los contratos tal como se entregaron; las secciones 6 y 7 se conservan como registro del plan.
+> **Estado de ejecución (secciones 5 a 8): EJECUTADO.** P0 y los paquetes A, B, C, D, E1, E2, F, G y H están implementados y con pruebas (la suite completa pasa); la integración (I) quedó completa: `README.md` e `info/web/model.js` (Guía y Funciones) describen préstamos, lista de espera, adeudos, asistente con IA y notificaciones. La sección 5 documenta los contratos tal como se entregaron; las secciones 6 y 7 se conservan como registro del plan.
 >
 > | Paquete | Módulo / entregable | Estado |
 > |---|---|---|
-> | P0 | Esquema S-1..S-5, semilla, `core/*`, shell del frontend | ✅ hecho |
+> | P0 | Esquema S-1..S-6, semilla, `core/*`, shell del frontend | ✅ hecho |
 > | A | `prestamos` (validar, prestar, renovar, devolver, recibo, políticas) | ✅ hecho |
 > | B | `espera` (alta, cancelación, expiración, autoservicio) | ✅ hecho |
 > | C | `adeudos` (pago, cancelación, pérdida, daño, reposición) | ✅ hecho |
-> | D | `asistente` (chatbot por reglas, consultas para el bibliotecario, vista móvil) | ✅ hecho |
+> | D | `asistente` (chatbot con LLM local y reglas, consultas para el bibliotecario, vista móvil) | ✅ hecho |
 > | E1 | `compras` (presupuesto, cancelar, recepción y factura) | ✅ hecho |
 > | E2 | `catalogo` (ejemplares, baja/reactivar, etiqueta, pendientes, importar) | ✅ hecho |
 > | F | `usuarios` (historial, actualización desde Servicios Escolares, importación CSV) | ✅ hecho |
 > | G | `reportes` + `inicio` (alumnos con adeudos, inventario por estante, vencidos, préstamos, tablero) | ✅ hecho |
 > | H | `notificaciones` + `scripts/respaldo.py`, `restaurar.py`, `medir_rendimiento.py`, `docs/operacion.md`, `restart` en compose | ✅ hecho |
-> | I | Integración final: `README.md` reescrito; `info/web/view.js` pendiente | 🟡 parcial |
+> | I | Integración final: `README.md` reescrito; Guía y Funciones en `info/web/model.js` | ✅ hecho |
 >
 > **Desviaciones respecto al plan (aditivas, no contradicen los contratos):** `espera` agrega `GET /api/espera/libros`, `GET /api/espera/mias` y `POST /api/espera/unirse` (autoservicio de sesión); `adeudos` agrega `GET /api/adeudos/<id>` y `GET /api/adeudos/prestamo/<id>` (previsualización); `catalogo` agrega `GET/POST` de importación y pendientes; `GET /api/politicas` exige `prestamos` o `perfiles`; la ruta `politicas` vive en `prestamos` con permiso `perfiles`.
 
@@ -295,11 +295,11 @@ P0 se ejecutó primero y solo. Tras P0 **los archivos compartidos no pertenecen 
 
 | Área | Entregado |
 |---|---|
-| `db/01_schema.sql` | Adiciones S-1..S-5 (sección 8) con comentarios "Adición al diseño" y cabecera resumen |
+| `db/01_schema.sql` | Adiciones S-1..S-6 (sección 8) con comentarios "Adición al diseño" y cabecera resumen |
 | `db/02_seed.sql` | Rol `colaborador`; permisos `prestamos espera adeudos asistente notificaciones` (15 en total); matriz 5.3; políticas (alumno 5/2/2/$10, docente 10/3/3/$10, resto `activa=false`); 16 intenciones; 14 FAQ corregidas; libro `LIB007` (`reservado`) |
 | `app/seed.py` | `COL001`/`Colabora123`, `A0513001` (Laura); demo: María 1 préstamo activo (LIB001) + espera en LIB005; Carlos préstamo **vencido** (LIB005, `estado='vencido'`); Laura préstamo devuelto con 2 días hábiles de retraso + adeudo `retraso` $20 **pendiente**; DOC001 3 préstamos (LIB001, LIB002, LIB005); `SOL000` recibida (FAC-2026-001; LIB001 a 42 USD, LIB002 a 30 USD) y `SOL001` pendiente. Vencimientos en días hábiles vía `core.circulacion` |
 | `app/config.py` | `TIPO_CAMBIO_USD_MXN` (18.00), `PRESUPUESTO_MENSUAL_USD` (5000), `ESPERA_DIAS_RESERVA` (2); se leen con `core/parametros.py` |
-| `app/core/` | `errors.py` (`ApiError(msg, status, extra)`, `ApiError.reglas`, `motivo`, `exigir`), `calendario.py`, `parametros.py`, `notificaciones.py`, `circulacion.py` (5.2); pruebas en `app/core/tests/test_{calendario,parametros,notificaciones,circulacion}.py`; `app/core/README.md` actualizado |
+| `app/core/` | `excepciones.py` (`ApiError(msg, status, extra)`, `ApiError.reglas`, `motivo`, `exigir`), `calendario.py`, `parametros.py`, `notificaciones.py`, `circulacion.py` (5.2); pruebas en `app/core/tests/test_{calendario,parametros,notificaciones,circulacion}.py`; `app/core/README.md` actualizado |
 | Frontend shell | `main.js`: importación dinámica y tolerante de `/m/<m>/controller.js` (lista `MODULES`; un módulo ausente o roto se registra con `console.warn` y se omite); `core/router.js::hasRoute`; `core/layout.js` NAV con todos los módulos, visibles solo con permiso **y** ruta registrada |
 | Componentes | `labels.js` con todos los enums nuevos; nuevos genéricos `receiptBlock` (detail.js), `meter` (meter.js), `chatBubble/chatPanel/appendChat/bindChat` (chat.js) + CSS; `components/README.md` actualizado |
 | Pruebas / scripts | `conftest.py`: limpieza de `mensaje, conversacion, lista_espera`; fixtures `bibliotecario docente colaborador alumno2`; `perfiles` espera 15 permisos; `scripts/recrear_db.py` aplica todos los `db/*.sql` en orden (`--sin-semilla` omite los `*seed*`); `levantar.py` y cuentas demo (`auth/web/model.js`, README) incluyen `COL001` |
@@ -324,7 +324,7 @@ enviar_a_usuario(canal, asunto, cuerpo, id_usuario)        # destino = correo (e
 validar_canales(lista|None, por_defecto=("email",)) -> list   # 400 si hay canal invalido
 parsear(accion, detalle) -> {canal, destino, asunto, cuerpo}   # lo usa H para listar
 
-# app/core/errors.py
+# app/core/excepciones.py
 ApiError(message, status=400, extra=None) ; ApiError.reglas(motivos, message) ; motivo(codigo, mensaje) ; exigir(motivos, message)
 #   exigir([]) no hace nada; con motivos -> 422 {"error", "motivos":[{codigo, mensaje}]}
 
@@ -353,7 +353,7 @@ valor_reposicion(id_libro, tipo_cambio=None) -> {id_libro, valor_usd, fuente, ti
 
 **Convenciones comunes.** Errores `{"error": "..."}`; reglas incumplidas → **422** con `motivos` (`exigir`); conflicto de estado → 409; inexistente → 404 (`repo.get_or_404`); validación → 400 (`validate`). Fechas ISO; importes numéricos (`JSONProvider` convierte `Decimal`). Acciones de bitácora ≤ 40 caracteres con prefijo del módulo: `prestamo_*`, `espera_*`, `adeudo_*`, `asistente_*`, `compra_*`, `ejemplar_*`, `usuario_*`, `notif_*` (solo `core.notificaciones`). **"Vencido" = D-24.** Un módulo no importa el `model/service` de otro, salvo `app.modules.catalogo.model.add_ejemplares` (estable) y `app.core.*`; la integración es por SQL y por `core.circulacion`.
 
-**Plantilla obligatoria de un módulo nuevo** (backend): `__init__.py` = `from app.core.module import make_blueprint` + `bp = make_blueprint(__name__)` (se registra solo); `model.py` (SQL con `repo`), `service.py` (esquemas `validate(...)`, reglas, `@audit`/`log`), `controller.py` (`from . import bp`; solo `body()`, `query_args()`, `created()`, `@permission_required`/`@login_required`). Frontend: `web/model.js` (solo `api`), `web/view.js` (puro, componentes de `/js/components/index.js`), `web/controller.js` (`export const routes = [{path, perm, section, action}]`, `listPage`/`editPage`/`bindToggle`/`bindForm`/`onAction`/`confirmAction`). Nada de HTML/CSS ad hoc, mapas de etiquetas propios ni tablas/formularios propios; etiquetas con `statusBadge/label/labelItems` (5.1). El nombre del módulo debe estar en `MODULES` de `main.js` (ya están todos) y su `section` = clave de menú del NAV.
+**Plantilla obligatoria de un módulo nuevo** (backend): `__init__.py` = `from app.core.module import make_blueprint` + `bp = make_blueprint(__name__)` (se registra solo); `model.py` (SQL con `repo`), `service.py` (esquemas `validate(...)`, reglas, `@audit`/`log`), `controller.py` (`from . import bp`; solo `body()`, `query_args()`, `created()`, `@permission_required`/`@login_required`). Frontend: `web/model.js` (solo `api`), `web/view.js` (puro, componentes de `/js/components/index.js`), `web/controller.js` (`export const routes = [{path, perm, section, action}]`, `listPage`/`editPage`/`bindAlternar`/`bindForm`/`onAction`/`confirmAction`). Nada de HTML/CSS ad hoc, mapas de etiquetas propios ni tablas/formularios propios; etiquetas con `statusBadge/label/labelItems` (5.1). El nombre del módulo debe estar en `MODULES` de `main.js` (ya están todos) y su `section` = clave de menú del NAV.
 
 ### 5.3 Permisos y matriz rol-permiso (semilla P0, ya aplicada)
 
@@ -376,7 +376,7 @@ Semilla de políticas: alumno `dias_prestamo=5, max_libros=2, max_renovaciones=2
 
 Ver 5.1. Contrato para los módulos: exportar `routes` desde `/m/<m>/controller.js`; si el módulo falla al importarse se omite sin romper la app. La entrada de menú aparece cuando existe permiso y alguna ruta con ese `path` exacto (p. ej. `prestamos`, `espera`, `adeudos`, `asistente`, `notificaciones`, `reportes`, `compras`, `catalogo`, `usuarios`, `perfiles`). Rutas móviles/bare (`bare: true`) no pasan por el menú.
 
-Criterio de aceptación de P0 (verificado): `docker compose exec -T web pytest` → 101 pruebas pasaban en P0 (hoy 219); `scripts/recrear_db.py -y` aplica todos los `db/*.sql` + semilla; `/api/me` del administrador devuelve 15 permisos; `node --check` OK en todos los `.js`.
+Criterio de aceptación de P0 (verificado): `docker compose exec -T web pytest` → 101 pruebas pasaban en P0 (hoy la suite completa pasa); `scripts/recrear_db.py -y` aplica todos los `db/*.sql` + semilla; `/api/me` del administrador devuelve 15 permisos; `node --check` OK en todos los `.js`.
 
 ---
 
@@ -449,7 +449,7 @@ Cada paquete **solo** crea/edita los archivos listados (los módulos existentes 
 
 **BD:** sin cambios propios; escribe `adeudo`, `ejemplar` (`estado='baja'`, `motivo_baja`), `prestamo` (cierre por pérdida: `estado='devuelto'`, `fecha_devolucion=now()`).
 
-**Núcleo obligatorio:** `circulacion.valor_reposicion` (RN-04, ya implementa el contrato siguiente), `monto_danio` (D-08, valida 10–100), `dias_retraso`/`multa_retraso` (retraso al reportar pérdida o daño), `parametros.tipo_cambio()`, `notificaciones.enviar(...)` canales `servicios_escolares`/`tesoreria`/`email`, `toggle`-style guardas con `ApiError(409)`, `validate` (`Str` referencia 3–40, `Int` porcentaje), `@audit` (`adeudo_pago`, `adeudo_cancelar`, `adeudo_perdida`, `adeudo_danio`). Cancelar: `require_permission`/rol `admin` (`current_user()['rol']`).
+**Núcleo obligatorio:** `circulacion.valor_reposicion` (RN-04, ya implementa el contrato siguiente), `monto_danio` (D-08, valida 10–100), `dias_retraso`/`multa_retraso` (retraso al reportar pérdida o daño), `parametros.tipo_cambio()`, `notificaciones.enviar(...)` canales `servicios_escolares`/`tesoreria`/`email`, guardas de cambio de estado con `ApiError(409)`, `validate` (`Str` referencia 3–40, `Int` porcentaje), `@audit` (`adeudo_pago`, `adeudo_cancelar`, `adeudo_perdida`, `adeudo_danio`). Cancelar: `require_permission`/rol `admin` (`current_user()['rol']`).
 
 **Contrato de reposición** (implementado en `core.circulacion.valor_reposicion`; también lo usa D para explicar): `valor_usd = última detalle_solicitud.precio_unitario del libro en solicitud con estado 'recibida'` (orden `fecha_recepcion DESC, id_detalle DESC`), o `libro.precio_referencia` si no hay compras; `monto_mxn = round(valor_usd × tipo_cambio(), 2)`.
 
@@ -461,7 +461,7 @@ Cada paquete **solo** crea/edita los archivos listados (los módulos existentes 
 | `POST /api/adeudos/<id>/pago` | `{referencia_tesoreria (3-40), fecha_pago?}` | adeudo `pagado`, `fecha_pago`; bitácora `adeudo_pago` con la referencia; correo simulado al usuario; 409 si ya pagado/cancelado |
 | `POST /api/adeudos/<id>/cancelar` (solo rol `admin`) | `{motivo (3-120)}` | adeudo `cancelado`; bitácora `adeudo_cancelar` |
 | `GET /api/adeudos/reposicion` `?id_libro=` | — | `{id_libro, valor_usd, fuente:"ultima_compra"\|"precio_referencia", tipo_cambio, monto_mxn}` |
-| `GET /api/tipo-cambio` | — | `{usd_mxn, fuente:"simulado", nota}` |
+| `GET /api/tipo_cambio` | — | `{usd_mxn, fuente:"simulado", nota}` |
 | `POST /api/adeudos/perdida` | `{id_prestamo, tipo_cambio?, observacion?}` | 201 `{adeudos:[...], valor_usd, tipo_cambio, monto_mxn}`; crea adeudo `retraso` hasta hoy si hay retraso (D-07), adeudo `perdida`, ejemplar `baja/perdido`, cierra el préstamo, avisos `servicios_escolares` y `tesoreria` (`core.notificaciones`); 409 si el préstamo ya está cerrado |
 | `POST /api/adeudos/danio` | `{id_prestamo, porcentaje?:10-100 (50), observacion?, dar_baja?:false}` | 201 `{adeudo, devolucion}`: registra devolución (misma regla de retraso que A, vía `core.circulacion`), adeudo `danio`, ejemplar `disponible` o `baja/danado` |
 
@@ -473,7 +473,7 @@ Cada paquete **solo** crea/edita los archivos listados (los módulos existentes 
 
 ### Paquete D — `asistente` (chatbot) · RF-29..33, RNF-12/13/14, PS-S3-01..09, PS-TEC-09, PS-MET-03
 
-**Archivos:** `app/modules/asistente/{__init__.py, model.py, service.py, controller.py}`, `app/modules/asistente/web/{model.js, view.js, controller.js}`, `app/modules/asistente/tests/test_asistente.py`.
+**Archivos:** `app/modules/asistente/{__init__.py, model.py, service.py, controller.py}`, `app/modules/asistente/web/{model.js, view.js, controller.js}`, `app/modules/asistente/tests/{test_asistente.py, test_asistente_ia.py}`, `app/core/ia.py`, `app/core/tests/test_ia.py`.
 
 **BD:** usa `intencion`, `pregunta_frecuente`, `conversacion`, `mensaje` (sin cambios; intenciones y FAQ ya sembradas, 5.3). **Núcleo obligatorio:** `circulacion.politica_vigente(id_rol)` (reglas con números reales), `contexto_usuario` (estatus de préstamos/multas, `suspendido`), `valor_reposicion` (explicar pérdida), `repo.select`/`build_where(search=...)` (búsqueda de libros con unaccent), `validate`, `@audit(asistente_resolver)`. Tests con `conversacion`/`mensaje` se limpian solos (`conftest.py`). Paso a bibliotecario = mensaje con la intención `pasar_a_bibliotecario` en una conversación con `resuelta=false`. Datos de políticas leídos de `politica_prestamo` (no hardcodear números).
 
@@ -481,8 +481,9 @@ Cada paquete **solo** crea/edita los archivos listados (los módulos existentes 
 
 | Método y ruta | Permiso | Payload | Respuesta |
 |---|---|---|---|
-| `POST /api/asistente/mensajes` | `asistente` | `{texto (1-500), id_conversacion?, canal?:"web"\|"movil"}` | `{id_conversacion, respuesta:{texto, intencion, con_bibliotecario:bool, libros?:[{id_libro, clave, titulo, disponibles, ubicacion}], enlaces?:[{texto, ruta}]}}`. Guarda mensaje del usuario y de la respuesta con `id_intencion` |
+| `POST /api/asistente/mensajes` | `asistente` | `{texto (1-500), id_conversacion?, canal?:"web"\|"movil"}` | `{id_conversacion, respuesta:{texto, intencion, con_bibliotecario:bool, fuente:"ia"\|"reglas", libros?:[{id_libro, clave, titulo, disponibles, ubicacion}], enlaces?:[{texto, ruta}]}}`. Guarda mensaje del usuario y de la respuesta con `id_intencion` |
 | `GET /api/asistente/conversaciones/<id>` | `asistente` | — | `{id_conversacion, resuelta, mensajes:[{emisor, texto, fecha}]}` (solo el dueño; las del visitante por `session`) |
+| `GET /api/asistente/estado` | `asistente` | — | `{ia:bool, modelo:str\|null}` (la pantalla muestra "Respuestas con IA" o "Modo básico") |
 | `POST /api/asistente/conversaciones/<id>/opinion` | `asistente` | `{calificacion:1-5, resuelta?:bool}` | conversación actualizada |
 | `GET /api/asistente/consultas` `?estado=pendiente\|resuelta` | `prestamos` | — | `[{id_conversacion, usuario:{matricula, nombre_completo}\|null, fecha_inicio, ultimo_mensaje, resuelta}]` |
 | `POST /api/asistente/consultas/<id>/resolver` | `prestamos` | `{respuesta (1-500)}` | conversación con `resuelta=true` y mensaje `emisor='asistente'` con prefijo "[Bibliotecario]"; bitácora `asistente_resolver` |
@@ -548,7 +549,7 @@ Se mantiene el filtro de visibilidad existente (no-personal solo ve activos, `ca
 
 **Archivos (módulo existente, dueño exclusivo):** `app/modules/usuarios/{model.py, service.py, controller.py}`, `app/modules/usuarios/web/{model.js, view.js, controller.js}`, `app/modules/usuarios/simulado/servicios_escolares.json` (nuevo), `app/modules/usuarios/tests/*`.
 
-**BD:** sin cambios. **Núcleo/componentes:** `validate`, `repo.exists/insert/update`, `toggle_estado` (guardas de baja existentes), `circulacion.contexto_usuario` (conteos de préstamos y adeudos para `adeudos_pendientes`/`_n` y guarda de baja por préstamos abiertos), `@audit`; UI: `detailView`, `dataTable`, `formView`, `statusBadge`, `label('adeudoTipo')`, `label('listaEspera')`.
+**BD:** sin cambios. **Núcleo/componentes:** `validate`, `repo.exists/insert/update`, `alternar_estado` (guardas de baja existentes), `circulacion.contexto_usuario` (conteos de préstamos y adeudos para `adeudos_pendientes`/`_n` y guarda de baja por préstamos abiertos), `@audit`; UI: `detailView`, `dataTable`, `formView`, `statusBadge`, `label('adeudoTipo')`, `label('listaEspera')`.
 
 **API** (permiso `usuarios`):
 
@@ -644,7 +645,7 @@ No se agregan tablas. Tipo de cambio, presupuesto mensual, referencia de pago, l
 
 ### Resultados de pruebas E2E
 
-**Resumen:** el 2026-10-27 pasaron los **15 flujos** en Chrome contra el stack Docker (`python3 scripts/levantar.py`, BD demo), sin errores de consola. Pruebas automáticas: **236 pasan** (`docker compose exec -T web pytest`); `node --check` sin errores en todo el JavaScript.
+**Resumen:** el 2026-10-27 pasaron los **15 flujos** en Chrome contra el stack Docker (`python3 scripts/levantar.py`, BD demo), sin errores de consola. Pruebas automáticas: **toda la suite pasa** (`docker compose exec -T web pytest`); `node --check` sin errores en todo el JavaScript.
 
 **Flujos ejecutados:** préstamos (prestar, renovar, devolver), adeudos (pago, pérdida, daño, cancelar), lista de espera, asistente, compras, catálogo, usuarios y perfiles, reportes, inicio, notificaciones, roles (menú y permisos por perfil), responsive 390 px, accesibilidad, 3 clics, estilos uniformes.
 

@@ -1,11 +1,11 @@
-"""Controlador de adeudos: endpoints HTTP bajo `/api/adeudos` y `/api/tipo-cambio` (capa controller del MVC).
+"""Controlador de adeudos: endpoints HTTP bajo `/api/adeudos` y `/api/tipo_cambio` (capa controller del MVC).
 
 Todas las rutas exigen el permiso `adeudos` y delegan en `service`.
 """
 from decimal import Decimal, InvalidOperation
 
 from app.core.auth import current_user, permission_required
-from app.core.errors import ApiError
+from app.core.excepciones import ApiError
 from app.core.http import body, created, query_args
 
 from . import bp, service
@@ -132,10 +132,10 @@ def danio():
     return created(service.danio(body(), current_user()))
 
 
-@bp.get("/api/tipo-cambio")
+@bp.get("/api/tipo_cambio")
 @permission_required("adeudos")
 def tipo_cambio():
-    """GET /api/tipo-cambio — tipo de cambio USD/MXN simulado (permiso `adeudos`).
+    """GET /api/tipo_cambio — tipo de cambio USD/MXN simulado (permiso `adeudos`).
 
     Returns:
         JSON: `usd_mxn`, `fuente`, `nota`.

@@ -1,10 +1,10 @@
-"""Capa SERVICE de errores (reglas de negocio): sanea y limita los errores reportados por el navegador y los registra en `bitacora` via `app.core.errores`.
+"""Capa SERVICE de errores (reglas de negocio): sanea y limita los errores reportados por el navegador y los registra en `bitacora` via `app.core.bitacora_errores`.
 
-No tiene capa model propia: la persistencia la hace `core.errores.registrar`.
+No tiene capa model propia: la persistencia la hace `core.bitacora_errores.registrar`.
 """
 from flask import session
 
-from app.core import errores
+from app.core import bitacora_errores
 
 # Campos admitidos del reporte y su largo maximo (se truncan, no se rechazan).
 _CAMPOS = (("mensaje", 120), ("ruta", 40), ("origen", 30))
@@ -38,7 +38,7 @@ def reportar(datos, cliente):
         dict: `{"registrado": bool}`.
     """
     mensaje, ruta, origen = (_texto(datos.get(c), n) for c, n in _CAMPOS)
-    if not mensaje or not errores.dentro_del_limite(cliente):
+    if not mensaje or not bitacora_errores.dentro_del_limite(cliente):
         return {"registrado": False}
     resumen = f"{ruta or '-'}: {mensaje}" + (f" ({origen})" if origen else "")
-    return {"registrado": errores.registrar("cliente", resumen, session.get("uid"))}
+    return {"registrado": bitacora_errores.registrar("cliente", resumen, session.get("uid"))}

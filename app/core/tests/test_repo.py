@@ -3,7 +3,7 @@ import psycopg
 import pytest
 
 from app.core import repo
-from app.core.errors import ApiError
+from app.core.excepciones import ApiError
 from app.testing import make_book, make_user, sql, uniq, url
 
 
@@ -21,13 +21,13 @@ def render(where, conn):
 
 # ---- build_where (sin tocar datos) ----
 
-def test_where_empty_is_true(conn):
+def test_where_vacio_es_verdadero(conn):
     """Sin filtros el WHERE es TRUE."""
     assert render(repo.build_where({}), conn) == ("TRUE", [])
     assert render(repo.build_where({"a": None, "b": ""}, search=("  ", ["x"])), conn) == ("TRUE", [])
 
 
-def test_where_equality_ops_and_lists(conn):
+def test_where_igualdad_operadores_y_listas(conn):
     """Igualdad, operadores con sufijo y listas (ANY) generan el SQL esperado."""
     q, p = render(repo.build_where({"u.estado": "activo", "v.disponibles__gt": 0, "id": [1, 2], "x__ne": "k"}), conn)
     assert q == '"u"."estado" = %s AND "v"."disponibles" > %s AND "id" = ANY(%s) AND "x" <> %s'
@@ -35,7 +35,7 @@ def test_where_equality_ops_and_lists(conn):
     assert render(repo.build_where({"id": []}), conn) == ("FALSE", [])
 
 
-def test_where_values_never_interpolated(conn):
+def test_where_valores_nunca_se_interpolan(conn):
     """Los valores viajan como parametros; nunca se interpolan en el SQL."""
     evil = "x'; DROP TABLE usuario; --"
     q, p = render(repo.build_where({"estado": evil}, search=(evil, ["u.nombre"])), conn)
@@ -43,7 +43,7 @@ def test_where_values_never_interpolated(conn):
     assert p == [evil, repo.like_pattern(evil)]
 
 
-def test_where_search_unaccent(conn):
+def test_where_busqueda_sin_acentos(conn):
     """La busqueda es sin acentos/mayusculas y escapa los comodines LIKE."""
     q, p = render(repo.build_where(search=("Cálc_ulo%", ["a.x", "b"])), conn)
     assert q == ('(unaccent(lower("a"."x"::text)) LIKE unaccent(lower(%s)) OR '
@@ -52,7 +52,7 @@ def test_where_search_unaccent(conn):
 
 
 @pytest.mark.parametrize("bad", ["a; DROP TABLE x", "a b", "a.b.c", "1a", "", 'a"b', "a-b", "x) OR (1=1"])
-def test_identifier_whitelist_rejects(bad):
+def test_lista_blanca_de_identificadores_rechaza(bad):
     """Identificadores con sintaxis no permitida se rechazan con ValueError."""
     with pytest.raises(ValueError):
         repo.ident(bad)
@@ -62,7 +62,7 @@ def test_identifier_whitelist_rejects(bad):
         repo.build_where(search=("q", [bad]))
 
 
-def test_where_bad_operator_and_order():
+def test_where_operador_y_orden_invalidos():
     """Operadores y ORDER BY fuera de la lista blanca lanzan ValueError."""
     with pytest.raises(ValueError):
         repo.build_where({"a__like": 1})
@@ -73,14 +73,14 @@ def test_where_bad_operator_and_order():
             repo._order_by(bad)
 
 
-def test_order_by_render(conn):
+def test_order_by_genera_sql(conn):
     """ORDER BY se renderiza con identificadores entrecomillados y direccion en mayusculas."""
     assert repo._order_by(["u.a desc", "b"]).as_string(conn) == ' ORDER BY "u"."a" DESC, "b"'
 
 
 # ---- operaciones con BD ----
 
-def test_unknown_table_or_column_rejected(app):
+def test_tabla_o_columna_desconocida_se_rechaza(app):
     """Tablas o columnas inexistentes se rechazan antes de ejecutar el SQL."""
     with app.app_context():
         with pytest.raises(ValueError):
@@ -95,7 +95,7 @@ def test_unknown_table_or_column_rejected(app):
             repo.update("usuario", "id_usuario", 1, {})
 
 
-def test_get_or_404_insert_update_exists_count(app):
+def test_obtener_o_404_insertar_actualizar_existe_contar(app):
     """Ciclo insert/get_or_404/update/exists/count sobre una tabla real."""
     u = make_user()
     with app.app_context():
@@ -119,7 +119,7 @@ def test_get_or_404_insert_update_exists_count(app):
         repo.execute("DELETE FROM rol WHERE id_rol = %s", (r["id_rol"],))
 
 
-def test_get_or_create_and_select(app):
+def test_obtener_o_crear_y_seleccionar(app):
     """`get_or_create` reutiliza la fila existente y `select` filtra, ordena y limita."""
     b = make_book(tema="Tema" + uniq(), estado="inactivo")
     with app.app_context():

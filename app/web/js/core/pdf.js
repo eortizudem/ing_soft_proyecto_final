@@ -39,7 +39,7 @@ export function buildPdf(lines) {
   const pages = [];
   for (let i = 0; i < wrapped.length; i += LINES_PER_PAGE) pages.push(wrapped.slice(i, i + LINES_PER_PAGE));
 
-  // Object ids: 1 catalog, 2 pages, 3 font, then a (page, content) pair per page.
+  // Ids de objeto: 1 catálogo, 2 páginas, 3 fuente y luego un par (página, contenido) por cada página.
   const objects = [
     '<< /Type /Catalog /Pages 2 0 R >>',
     '',

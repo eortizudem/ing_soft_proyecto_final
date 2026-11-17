@@ -1,29 +1,29 @@
-"""Reglas de circulacion compartidas (RN-01..RN-06, D-01..D-09, D-24). Prestamos, espera, adeudos y asistente
-deben llamar a ESTE codigo; ningun modulo reimplementa vencimientos, multas, elegibilidad ni reposicion.
+"""Reglas de circulación compartidas (RN-01..RN-06, D-01..D-09, D-24). Préstamos, espera, adeudos y asistente
+deben llamar a ESTE código; ningún módulo reimplementa vencimientos, multas, elegibilidad ni reposición.
 
-Dos capas (mas una escritura compartida minima, `cerrar_prestamo`):
+Dos capas (mas una escritura compartida mínima, `cerrar_prestamo`):
   * Reglas puras (sin BD): `fecha_vencimiento`, `dias_retraso`, `multa_retraso`, `esta_vencido`,
     `evaluar_prestamo`, `evaluar_renovacion`, `fecha_renovacion`, `limite_reserva`, `valor_reposicion_mxn`, `monto_danio`.
-    Devuelven valores o listas de motivos `[{codigo, mensaje}]` (lista vacia = permitido).
+    Devuelven valores o listas de motivos `[{codigo, mensaje}]` (lista vacía = permitido).
   * Lectura de contexto (SQL de solo lectura, requiere contexto de app): `contexto_usuario`, `contexto_libro`,
-    `autorizar_prestamo`, `autorizar_renovacion`, `valor_reposicion`. Escriben NADA; las escrituras son del modulo dueno.
+    `autorizar_prestamo`, `autorizar_renovacion`, `valor_reposicion`. Escriben NADA; las escrituras son del módulo dueño.
 
-Definicion unica de vencido (D-24): `fecha_devolucion IS NULL AND fecha_vencimiento < hoy`. `prestamo.estado='vencido'`
-es solo cache; nunca se usa para decidir. Para convertir motivos en 422: `core.errors.exigir(motivos)`.
+Definición única de vencido (D-24): `fecha_devolucion IS NULL AND fecha_vencimiento < hoy`. `prestamo.estado='vencido'`
+es solo caché; nunca se usa para decidir. Para convertir motivos en 422: `core.excepciones.exigir(motivos)`.
 """
 from datetime import date, datetime, time
 from decimal import ROUND_HALF_UP, Decimal
 
 from . import db, parametros, repo
 from .calendario import habiles_entre, sumar_habiles
-from .errors import ApiError, motivo
+from .excepciones import ApiError, motivo
 
 CENT = Decimal("0.01")
 PORCENTAJE_DANIO_DEFAULT = 50          # D-08
 PORCENTAJE_DANIO_RANGO = (10, 100)
 TIPOS_USO_PRESTABLES = ("prestamo_externo",)
 
-# Codigos de motivo (contrato con el frontend y las pruebas)
+# Códigos de motivo (contrato con el frontend y las pruebas)
 USUARIO_INACTIVO = "USUARIO_INACTIVO"
 SIN_POLITICA = "SIN_POLITICA"
 MULTAS_PENDIENTES = "MULTAS_PENDIENTES"
@@ -57,17 +57,17 @@ def redondear(x) -> Decimal:
 # ============================== reglas puras ==============================
 
 def fecha_vencimiento(fecha_prestamo, dias_prestamo) -> date:
-    """RN-05/RN-06 + D-03: `dias_prestamo` dias habiles despues del prestamo (inclusivo)."""
+    """RN-05/RN-06 + D-03: `dias_prestamo` días hábiles después del préstamo (inclusivo)."""
     return sumar_habiles(_dia(fecha_prestamo), int(dias_prestamo))
 
 
 def dias_retraso(vencimiento, hasta) -> int:
-    """Dias habiles de retraso en (vencimiento, hasta]; devolver el dia de vencimiento no genera multa."""
+    """Días hábiles de retraso en (vencimiento, hasta]; devolver el día de vencimiento no genera multa."""
     return habiles_entre(_dia(vencimiento), _dia(hasta))
 
 
 def multa_retraso(dias, multa_diaria) -> Decimal:
-    """RN-03/D-04: dias habiles x tarifa diaria, sin tope."""
+    """RN-03/D-04: días hábiles x tarifa diaria, sin tope."""
     return redondear(Decimal(int(dias)) * Decimal(str(multa_diaria)))
 
 
@@ -78,7 +78,7 @@ def esta_vencido(vencimiento, devolucion=None, hoy=None) -> bool:
 
 def evaluar_prestamo(*, usuario_activo, politica, prestamos_abiertos, vencidos, adeudos_pendientes,
                      libro_activo, tipo_uso, disponibles, reservados=0, usuario_notificado=False):
-    """RN-01 (+D-01/D-02): motivos por los que NO se puede prestar. Lista vacia = autorizado.
+    """RN-01 (+D-01/D-02): motivos por los que NO se puede prestar. Lista vacía = autorizado.
 
     politica: dict con `max_libros` o None. adeudos_pendientes/vencidos/prestamos_abiertos: conteos.
     reservados: ejemplares reservados por la lista de espera (D-19); usuario_notificado: el solicitante es
@@ -107,7 +107,7 @@ def evaluar_prestamo(*, usuario_activo, politica, prestamos_abiertos, vencidos, 
 
 
 def evaluar_renovacion(*, abierto, vencido, num_renovaciones, max_renovaciones, adeudos_pendientes, espera_activa):
-    """RN-02/RN-06 + D-05: motivos por los que NO se puede renovar. Lista vacia = permitido."""
+    """RN-02/RN-06 + D-05: motivos por los que NO se puede renovar. Lista vacía = permitido."""
     if not abierto:
         return [motivo(PRESTAMO_CERRADO, "El préstamo ya fue devuelto.")]
     m = []
@@ -123,13 +123,13 @@ def evaluar_renovacion(*, abierto, vencido, num_renovaciones, max_renovaciones, 
 
 
 def fecha_renovacion(vencimiento_actual, dias_prestamo) -> date:
-    """D-05: un periodo completo (dias habiles) sobre la fecha de vencimiento ACTUAL."""
+    """D-05: un periodo completo (días hábiles) sobre la fecha de vencimiento ACTUAL."""
     return sumar_habiles(_dia(vencimiento_actual), int(dias_prestamo))
 
 
 def limite_reserva(desde=None) -> datetime:
-    """D-19: fin del dia (23:59:59) tras `dias_reserva_espera()` dias habiles; valor de
-    `lista_espera.fecha_limite_recoger`. Lo usan prestamos (al notificar) y espera (al expirar/avanzar)."""
+    """D-19: fin del día (23:59:59) tras `dias_reserva_espera()` días hábiles; valor de
+    `lista_espera.fecha_limite_recoger`. Lo usan préstamos (al notificar) y espera (al expirar/avanzar)."""
     return datetime.combine(sumar_habiles(_hoy(desde), parametros.dias_reserva_espera()), time(23, 59, 59))
 
 
@@ -139,7 +139,7 @@ def valor_reposicion_mxn(valor_usd, tipo_cambio) -> Decimal:
 
 
 def monto_danio(monto_reposicion, porcentaje=PORCENTAJE_DANIO_DEFAULT) -> Decimal:
-    """D-08: porcentaje (10-100, por defecto 50) del valor de reposicion."""
+    """D-08: porcentaje (10-100, por defecto 50) del valor de reposición."""
     lo, hi = PORCENTAJE_DANIO_RANGO
     if not lo <= porcentaje <= hi:
         raise ApiError(f"El porcentaje de daño debe estar entre {lo} y {hi}.")
@@ -149,13 +149,13 @@ def monto_danio(monto_reposicion, porcentaje=PORCENTAJE_DANIO_DEFAULT) -> Decima
 # ============================== contexto desde la BD (solo lectura) ==============================
 
 def politica_vigente(id_rol):
-    """Politica activa mas reciente del rol (o None)."""
+    """Política activa mas reciente del rol (o None)."""
     return db.fetchone("SELECT * FROM politica_prestamo WHERE id_rol=%s AND activa "
                        "ORDER BY vigente_desde DESC, id_politica DESC LIMIT 1", (id_rol,))
 
 
 def contexto_usuario(id_usuario, hoy=None):
-    """Estado de circulacion del usuario: datos, politica, conteos y `suspendido` (D-09). 404 si no existe."""
+    """Estado de circulación del usuario: datos, política, conteos y `suspendido` (D-09). 404 si no existe."""
     u = db.fetchone("SELECT u.id_usuario, u.matricula, u.nombre_completo, u.correo, u.estado, u.id_rol, r.nombre AS rol "
                     "FROM usuario u JOIN rol r ON r.id_rol=u.id_rol WHERE u.id_usuario=%s", (id_usuario,))
     if not u:
@@ -204,7 +204,7 @@ def autorizar_prestamo(id_usuario, id_libro, hoy=None):
 
 
 def autorizar_renovacion(id_prestamo, hoy=None):
-    """RN-02/RN-06 sobre un prestamo existente (usa la politica con la que se creo, D-05):
+    """RN-02/RN-06 sobre un préstamo existente (usa la política con la que se creó, D-05):
     `{permitido, motivos, prestamo, max_renovaciones, dias_prestamo, nueva_fecha_vencimiento, dias_retraso}`."""
     p = db.fetchone(
         """SELECT p.*, e.id_libro, pol.dias_prestamo, pol.max_renovaciones, pol.multa_diaria
@@ -230,7 +230,7 @@ def autorizar_renovacion(id_prestamo, hoy=None):
 
 
 def valor_reposicion(id_libro, tipo_cambio=None):
-    """RN-04/D-07: `{id_libro, valor_usd, fuente, tipo_cambio, monto_mxn}`. valor_usd = precio_unitario de la ultima
+    """RN-04/D-07: `{id_libro, valor_usd, fuente, tipo_cambio, monto_mxn}`. valor_usd = precio_unitario de la última
     compra recibida del libro ('ultima_compra'), o libro.precio_referencia ('precio_referencia')."""
     libro = repo.get_or_404("libro", "id_libro", id_libro, "No se encontró el libro.")
     ultima = db.fetchone(
@@ -245,6 +245,6 @@ def valor_reposicion(id_libro, tipo_cambio=None):
 
 
 def cerrar_prestamo(id_prestamo):
-    """Registra la devolucion (`fecha_devolucion=now()`, `estado='devuelto'`). Unica escritura de cierre: la usan
-    prestamos (devolver) y adeudos (perdida/dano)."""
+    """Registra la devolución (`fecha_devolucion=now()`, `estado='devuelto'`). Única escritura de cierre: la usan
+    préstamos (devolver) y adeudos (perdida/dano)."""
     db.execute("UPDATE prestamo SET estado='devuelto', fecha_devolucion=now() WHERE id_prestamo=%s", (id_prestamo,))

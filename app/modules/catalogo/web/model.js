@@ -1,8 +1,7 @@
 /** @module modules/catalogo/model — llamadas a la API de libros/ejemplares y utilidades de datos del catálogo */
-// Catalog API calls and data shaping.
 import { api, query } from '/js/core/api.js';
 
-// Field search (RF-12..15): `campo` picks which field `q` applies to; empty = every field.
+// Búsqueda por campo (RF-12..15): `campo` elige a qué campo se aplica `q`; vacío = todos los campos.
 /**
  * Campos de búsqueda disponibles (RF-12..15) como pares [valor, etiqueta]; '' = todos los campos.
  * @type {Array<[string, string]>}
@@ -36,11 +35,11 @@ export const list = ({ q = '', campo = '', tema = '', estado = '', tipo_uso = ''
  */
 export const get = (id) => api.get('/libros/' + encodeURIComponent(id));
 /**
- * Activa/inactiva un libro. Llama a POST /api/libros/:id/toggle.
+ * Activa/inactiva un libro. Llama a POST /api/libros/:id/estado.
  * @param {number|string} id - Id del libro.
  * @returns {Promise<Object>} Libro actualizado.
  */
-export const toggle = (id) => api.post(`/libros/${encodeURIComponent(id)}/toggle`);
+export const alternar = (id) => api.post(`/libros/${encodeURIComponent(id)}/estado`);
 
 /**
  * Obtiene los temas del catálogo. Llama a GET /api/temas; ante error devuelve lista vacía.
@@ -54,7 +53,7 @@ export async function themes() {
   }
 }
 
-// Form fields (strings) -> API body. The server validates; we only convert types.
+// Campos del formulario (cadenas) -> cuerpo de la API. El servidor valida; aquí solo se convierten los tipos.
 /**
  * Convierte los campos del formulario (cadenas) al cuerpo de la API y crea o actualiza el libro.
  * Llama a PUT /api/libros/:id si hay `id`, o POST /api/libros. El servidor valida; aquí solo se convierten tipos.
@@ -103,7 +102,7 @@ export const emptyBook = () => ({
   estado: 'activo', ubicacion: { planta: 'Planta baja', pasillo: 'A', librero: 1, nivel: 1 },
 });
 
-// ---- Public search (buscar) ----
+// ---- Búsqueda pública (buscar) ----
 /**
  * Búsqueda pública de libros activos. Llama a GET /api/libros con estado=activo.
  * @param {Object} [filtros] - Filtros opcionales.

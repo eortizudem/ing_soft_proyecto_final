@@ -60,7 +60,7 @@ export const enviarRecibo = (value, canales) => api.post(`/prestamos/${id(value)
  */
 export const validar = ({ matricula, clave }) => api.post('/prestamos/validar', { matricula: matricula.trim(), clave: clave.trim() });
 
-// Form values (checkboxes canal_email / canal_whatsapp) -> API payload.
+// Valores del formulario (casillas canal_email / canal_whatsapp) -> cuerpo de la API.
 /**
  * POST /api/prestamos — registra un préstamo; convierte los checkboxes de canal en la lista `canales`.
  * @param {Object} data - Valores del formulario.

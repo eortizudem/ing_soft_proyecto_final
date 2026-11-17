@@ -1,16 +1,16 @@
-"""Acceso a PostgreSQL con psycopg 3: una conexion por peticion (dict_row)."""
+"""Acceso a PostgreSQL con psycopg 3: una conexión por petición (dict_row)."""
 import psycopg
 from flask import current_app, g
 from psycopg.rows import dict_row
 
 
 def connect(url=None):
-    """Abre una conexion psycopg con filas `dict`; sin `url` usa `DATABASE_URL` de la app actual."""
+    """Abre una conexión psycopg con filas `dict`; sin `url` usa `DATABASE_URL` de la app actual."""
     return psycopg.connect(url or current_app.config["DATABASE_URL"], row_factory=dict_row)
 
 
 def get_conn():
-    """Conexion de la peticion actual (se crea perezosamente y se guarda en `g`)."""
+    """Conexión de la petición actual (se crea perezosamente y se guarda en `g`)."""
     if "db" not in g:
         g.db = connect()
     return g.db
@@ -38,13 +38,13 @@ def execute(sql, params=()):
 
 
 def init_app(app):
-    """Registra el ciclo transaccional por peticion.
+    """Registra el ciclo transaccional por petición.
 
-    `after_request` hace commit si el status es < 400 y rollback en caso contrario; `teardown_appcontext` cierra la conexion.
+    `after_request` hace commit si el status es < 400 y rollback en caso contrario; `teardown_appcontext` cierra la conexión.
     """
     @app.after_request
     def finish(response):
-        """Confirma o revierte la transaccion segun el status de la respuesta."""
+        """Confirma o revierte la transacción según el status de la respuesta."""
         conn = g.get("db")
         if conn is not None:
             if response.status_code < 400:
@@ -55,7 +55,7 @@ def init_app(app):
 
     @app.teardown_appcontext
     def close(_exc):
-        """Cierra la conexion de la peticion, si se abrio."""
+        """Cierra la conexión de la petición, si se abrió."""
         conn = g.pop("db", None)
         if conn is not None:
             conn.close()

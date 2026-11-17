@@ -2,7 +2,7 @@
 import pytest
 
 from app.core import notificaciones
-from app.core.errors import ApiError
+from app.core.excepciones import ApiError
 from app.testing import make_user, sql
 
 

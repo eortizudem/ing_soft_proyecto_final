@@ -1,27 +1,27 @@
 #!/usr/bin/env python3
-"""Mide el tiempo de respuesta de los endpoints criticos (RNF-03/05/11/13, D-15). Solo biblioteca estandar.
+"""Mide el tiempo de respuesta de los endpoints críticos (RNF-03/05/11/13, D-15). Solo biblioteca estándar.
 
 Uso: python3 scripts/medir_rendimiento.py [--url http://localhost:8000] [-n 20] [-c 20] [--limite 3.0]
                                           [--usuario ADM001 --clave Admin123] [--escritura [--db librigest]]
 
-Inicia sesion, llama N veces a cada endpoint (una a la vez y luego -c solicitudes simultaneas, D-15) y muestra p50 / p95 / max en segundos.
-Sale con codigo 1 si el p95 de algun endpoint supera --limite (3 s por defecto) o si hay errores 5xx;
-los endpoints que responden 404 (modulo no instalado) se omiten con aviso.
+Inicia sesión, llama N veces a cada endpoint (una a la vez y luego -c solicitudes simultaneas, D-15) y muestra p50 / p95 / max en segundos.
+Sale con código 1 si el p95 de algún endpoint supera --limite (3 s por defecto) o si hay errores 5xx;
+los endpoints que responden 404 (módulo no instalado) se omiten con aviso.
 
 --url apunta a cualquier servidor (p. ej. un contenedor web sobre la BD de volumen, ver cargar_datos_volumen.py).
---escritura agrega los flujos de escritura: crear prestamo, renovar, devolver y registrar pago (N iteraciones,
+--escritura agrega los flujos de escritura: crear préstamo, renovar, devolver y registrar pago (N iteraciones,
 en serie). Crea su propio usuario (ZPERF01) y libro (ZPERF01) por la API y, al terminar, borra todo lo que
 generaron con SQL en la BD `--db` (por defecto la de POSTGRES_DB; requiere docker compose con el servicio db).
 
 Opciones: --url (servidor), -n (repeticiones por endpoint, 20), -c/--concurrentes (solicitudes simultaneas de la
-segunda pasada, 20; 0 la omite), --limite (p95 maximo en segundos, 3.0), --usuario/--clave (cuenta con permiso
+segunda pasada, 20; 0 la omite), --limite (p95 máximo en segundos, 3.0), --usuario/--clave (cuenta con permiso
 sobre los endpoints, ADM001/Admin123), --escritura, --db.
 
-Codigos de salida: 0 todos los endpoints dentro del limite; 1 p95 sobre el limite o errores HTTP >= 400
-(incluye 5xx; 404/403 puros se omiten); 2 no se pudo conectar o iniciar sesion.
+Códigos de salida: 0 todos los endpoints dentro del límite; 1 p95 sobre el límite o errores HTTP >= 400
+(incluye 5xx; 404/403 puros se omiten); 2 no se pudo conectar o iniciar sesión.
 
 Seguridad: las lecturas no modifican datos. --escritura SI escribe (crea y luego borra el usuario/libro ZPERF01
-y sus prestamos, adeudos y bitacora): usarla solo en una BD de pruebas (p. ej. librigest_volumen), no en produccion.
+y sus préstamos, adeudos y bitácora): usarla solo en una BD de pruebas (p. ej. librigest_volumen), no en producción.
 """
 import argparse
 import http.cookiejar
@@ -37,7 +37,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import _pg  # noqa: E402
 
-# (nombre, metodo, ruta, cuerpo JSON). Cubre catalogo, usuarios, circulacion, asistente y reportes.
+# (nombre, método, ruta, cuerpo JSON). Cubre catálogo, usuarios, circulación, asistente y reportes.
 ENDPOINTS = [
     ("libros", "GET", "/api/libros", None),
     ("libros?q=", "GET", "/api/libros?q=a", None),
@@ -63,7 +63,7 @@ def percentil(valores, p):
     """Percentil por rango mas cercano.
 
     Args:
-        valores: secuencia no vacia de numeros.
+        valores: secuencia no vacía de números.
         p: percentil deseado, de 0 a 100.
 
     Returns:
@@ -74,7 +74,7 @@ def percentil(valores, p):
 
 
 class Cliente:
-    """Cliente HTTP minimo con cookies de sesion (urllib) que mide el tiempo de cada peticion."""
+    """Cliente HTTP mínimo con cookies de sesión (urllib) que mide el tiempo de cada petición."""
 
     def __init__(self, base):
         """Crea el cliente.
@@ -86,7 +86,7 @@ class Cliente:
         self.opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
 
     def pedir(self, metodo, ruta, cuerpo=None):
-        """Realiza una peticion y mide su duracion.
+        """Realiza una petición y mide su duración.
 
         Args:
             metodo: verbo HTTP.
@@ -100,7 +100,7 @@ class Cliente:
         return status, seg
 
     def pedir_json(self, metodo, ruta, cuerpo=None):
-        """Como `pedir`, pero ademas decodifica la respuesta.
+        """Como `pedir`, pero además decodifica la respuesta.
 
         Args:
             metodo: verbo HTTP.
@@ -122,7 +122,7 @@ class Cliente:
         except urllib.error.HTTPError as e:
             crudo = e.read()
             status = e.code
-        except (urllib.error.URLError, OSError):  # tiempo agotado / conexion rota: cuenta como fallo (HTTP 0)
+        except (urllib.error.URLError, OSError):  # tiempo agotado / conexión rota: cuenta como fallo (HTTP 0)
             crudo, status = b"", 0
         seg = time.perf_counter() - t0
         try:
@@ -139,11 +139,11 @@ def _lote(cliente, metodo, ruta, cuerpo, n, concurrentes):
         metodo: verbo HTTP.
         ruta: ruta del endpoint.
         cuerpo: cuerpo JSON o None.
-        n: numero de peticiones.
+        n: número de peticiones.
         concurrentes: hilos simultaneos; <= 1 las ejecuta una a la vez.
 
     Returns:
-        Lista de tuplas (status, segundos), una por peticion.
+        Lista de tuplas (status, segundos), una por petición.
     """
     if concurrentes <= 1:
         return [cliente.pedir(metodo, ruta, cuerpo) for _ in range(n)]
@@ -157,11 +157,11 @@ def _fila(nombre, tiempos, estados, limite):
     Args:
         nombre: etiqueta del endpoint o flujo.
         tiempos: duraciones en segundos.
-        estados: codigos HTTP observados.
-        limite: p95 maximo aceptable en segundos.
+        estados: códigos HTTP observados.
+        limite: p95 máximo aceptable en segundos.
 
     Returns:
-        1 si el p95 supera `limite` o hubo algun HTTP >= 400; 0 en caso contrario.
+        1 si el p95 supera `limite` o hubo algún HTTP >= 400; 0 en caso contrario.
     """
     p95 = percentil(tiempos, 95)
     malo = p95 > limite or any(s >= 400 for s in estados)
@@ -176,16 +176,16 @@ MARCA = "ZPERF01"
 
 
 def limpiar_escritura(db):
-    """Borra el usuario y libro de medicion (ZPERF01) y todo lo que generaron.
+    """Borra el usuario y libro de medición (ZPERF01) y todo lo que generaron.
 
-    Elimina adeudos, renovaciones, prestamos, lista de espera, bitacora, ejemplares, libro, ubicacion de
-    medicion y usuario, con SQL directo en la BD indicada. Es idempotente.
+    Elimina adeudos, renovaciones, préstamos, lista de espera, bitácora, ejemplares, libro, ubicación de
+    medición y usuario, con SQL directo en la BD indicada. Es idempotente.
 
     Args:
         db: base de datos donde limpiar.
 
     Raises:
-        SystemExit: si no se puede ejecutar psql en el contenedor db (via `_pg.psql`).
+        SystemExit: si no se puede ejecutar psql en el contenedor db (vía `_pg.psql`).
     """
     cfg = _pg.config()
     _pg.psql(cfg["usuario"], db, f"""
@@ -201,18 +201,18 @@ def limpiar_escritura(db):
 
 
 def medir_escritura(cliente, n, limite, db):
-    """Mide crear prestamo, renovar, devolver y registrar pago de un adeudo (en serie).
+    """Mide crear préstamo, renovar, devolver y registrar pago de un adeudo (en serie).
 
     Crea por la API el usuario y libro ZPERF01, ejecuta n iteraciones y limpia al terminar (incluso si falla).
 
     Args:
-        cliente: `Cliente` con sesion iniciada.
+        cliente: `Cliente` con sesión iniciada.
         n: iteraciones.
-        limite: p95 maximo en segundos.
+        limite: p95 máximo en segundos.
         db: base donde limpiar los datos generados.
 
     Returns:
-        Numero de flujos fuera de limite o con errores (1 si no se pudo preparar o limpiar).
+        Número de flujos fuera de límite o con errores (1 si no se pudo preparar o limpiar).
     """
     print(f"\n== Flujos de escritura: {n} iteraciones en serie ==")
     try:
@@ -265,13 +265,13 @@ def medir(cliente, n, limite, concurrentes=1):
     """Mide todos los endpoints de `ENDPOINTS` e imprime la tabla de resultados.
 
     Args:
-        cliente: `Cliente` con sesion iniciada.
+        cliente: `Cliente` con sesión iniciada.
         n: solicitudes por endpoint.
-        limite: p95 maximo en segundos.
+        limite: p95 máximo en segundos.
         concurrentes: solicitudes simultaneas (1 = una a la vez).
 
     Returns:
-        Numero de endpoints fuera de limite o con errores. Los que responden solo 404/403 se omiten.
+        Número de endpoints fuera de límite o con errores. Los que responden solo 404/403 se omiten.
     """
     modo = f"{concurrentes} concurrentes" if concurrentes > 1 else "una a la vez"
     print(f"\n== {n} solicitudes por endpoint, {modo} ==")
@@ -290,13 +290,13 @@ def medir(cliente, n, limite, concurrentes=1):
 
 
 def main(argv=None):
-    """Inicia sesion, mide los endpoints (en serie, concurrente y opcionalmente escritura) y resume.
+    """Inicia sesión, mide los endpoints (en serie, concurrente y opcionalmente escritura) y resume.
 
     Args:
-        argv: lista de argumentos (None usa sys.argv); util para pruebas.
+        argv: lista de argumentos (None usa sys.argv); útil para pruebas.
 
     Returns:
-        0 si todo esta dentro del limite; 1 si hubo fallos; 2 si no hubo conexion o login.
+        0 si todo está dentro del límite; 1 si hubo fallos; 2 si no hubo conexión o login.
     """
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--url", default="http://localhost:8000", help="URL base del servidor (http://localhost:8000)")

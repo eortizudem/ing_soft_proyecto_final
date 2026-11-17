@@ -9,7 +9,7 @@ import psycopg
 from app.core import circulacion, consultas, espera
 from app.core.auth import has_permission
 from app.core.bitacora import audit, log
-from app.core.errors import ApiError, exigir, motivo
+from app.core.excepciones import ApiError, exigir, motivo
 from app.core.repo import or_404
 from app.core.validators import Int, Str, validate
 

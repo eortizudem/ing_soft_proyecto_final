@@ -6,9 +6,9 @@ Todos los scripts usan solo la biblioteca estándar de Python 3 y se ejecutan de
 
 ## 1. Disponibilidad (RNF-12)
 
-- `docker-compose.yml`: `restart: unless-stopped` en `db` y `web`; el servicio vuelve solo tras un fallo del proceso o
+- `docker-compose.yml`: `restart: unless-stopped` en `db`, `web` y `ollama`; el servicio vuelve solo tras un fallo del proceso o
   un reinicio del servidor (no si se detuvo a mano con `docker compose stop`).
-- Healthchecks: `db` (`pg_isready`) y `web` (`GET /api/health`, cada 10 s, 5 reintentos). El mismo chequeo está en el
+- Healthchecks: `db` (`pg_isready`), `ollama` (`ollama list`) y `web` (`GET /api/health`, cada 10 s, 5 reintentos). El mismo chequeo está en el
   `Dockerfile` (`HEALTHCHECK`). Estado: `docker compose ps` (columna STATUS: `healthy`).
 - Variables opcionales (ver `.env.example`; se pasan al servicio `web`): `TIPO_CAMBIO_USD_MXN` (18.00),
   `PRESUPUESTO_MENSUAL_USD` (5000), `ESPERA_DIAS_RESERVA` (2), `WEB_CONCURRENCY` (4 procesos de gunicorn),
@@ -147,6 +147,33 @@ propia (la petición fallida hace rollback). `POST /api/errores` es público y l
 **Indicadores** (PS-MET-02/03): el tiempo de atención en mostrador *no es derivable* (no se registra el inicio de
 la atención): la fila lo indica y se mantiene el cronometraje manual (PS-MET-01); sí se calcula la duración promedio del
 préstamo.
+
+## 3.2 Asistente con IA local (D-13, RNF-12/13)
+
+El servicio `ollama` (imagen `ollama/ollama:0.40.16`, sin puerto publicado) guarda los modelos en el volumen `ollama_models` y tiene tope de memoria `OLLAMA_MEM_LIMIT` (2 GB). `scripts/levantar.py` descarga el modelo si falta (`ollama pull`, con progreso) y lo precalienta con una petición mínima (omitir con `--sin-ia`). `web` solo espera que `ollama` haya iniciado: si no responde, el asistente usa reglas.
+
+**Elección del modelo** (equipo de pruebas: Docker Desktop con 10 CPU y 8 GB, solo CPU; mismas 11 preguntas con contexto de la base real; tiempos por pregunta, la primera incluye cargar el modelo):
+
+| Modelo | Descarga | RAM en uso | Tiempo por respuesta | Calidad con el contexto |
+| --- | --- | --- | --- | --- |
+| `qwen2.5:0.5b` | 397 MB | 0.7-0.8 GB | 0.2-2.3 s | Pobre: respuestas cortas o equivocadas ("no, no tienen" teniendo el libro; fechas sueltas) |
+| `qwen3:0.6b` | 522 MB | 1.1 GB | 0.2-1.8 s | Inventa (capital de Francia "Berlín") y dice "no tengo información" con el dato a la vista |
+| `gemma3:270m` | 291 MB | 0.7 GB | 0.2-0.8 s | Inservible: saluda en cada respuesta e ignora la pregunta |
+| `gemma3:1b` | 806 MB | 1.4 GB | 1.2-2.5 s | Inventó libros ("Python Programming") |
+| `llama3.2:1b` | 1.3 GB | 1.7 GB | 0.3-3.3 s | Responde "No lo sabes" aun con el dato en el contexto |
+| **`qwen2.5:1.5b`** (elegido) | 986 MB | 1.4 GB | 0.25-1.9 s (frío ~3-3.5 s) | La más fiel al contexto: fechas, ubicación y adeudos correctos |
+
+`qwen2.5:0.5b` sigue disponible para equipos muy limitados (`OLLAMA_MODEL=qwen2.5:0.5b`), con respuestas peores; la guarda de fidelidad descarta lo que no esté respaldado y entonces responden las reglas.
+
+**Latencia** (RNF-13, ≤ 3 s), `qwen2.5:1.5b`, 10 núcleos: 24 preguntas con el modelo ya cargado, mediana 0.98 s, p95 1.59 s, máximo 1.88 s. La primera pregunta con el modelo frío (tras 10 min sin uso, `keep_alive`) tarda ~3-3.5 s. Con las reglas (IA desactivada o caída) responde en ~0.03 s. **En equipos con menos núcleos el tiempo sube** (no medido): la pantalla muestra "Escribiendo…" y, si el modelo no responde en `OLLAMA_TIMEOUT` (20 s), contestan las reglas; para ir más rápido usa `qwen2.5:0.5b`.
+
+**Recursos** (`docker stats` durante una respuesta): `ollama` 1.3 GiB de RAM y hasta ~10 núcleos al 100 % durante ~1 s; en reposo 0 % de CPU y el modelo sigue cargado 10 min (después libera la RAM). Disco: ~1 GB en el volumen.
+
+**Problemas frecuentes**
+- La pantalla dice "Modo básico": el modelo no está descargado o `ollama` no corre. `docker compose ps`, `docker compose logs ollama`, `docker compose exec ollama ollama list`; descarga con `python3 scripts/levantar.py --no-build`.
+- Primera respuesta lenta: el modelo se carga en memoria (~3 s); `levantar.py` lo precalienta.
+- Memoria insuficiente (`ollama` se reinicia): sube `OLLAMA_MEM_LIMIT` o usa `qwen2.5:0.5b`. Cambios de variables: `docker compose up -d`.
+- Respuestas con `fuente: "reglas"` aunque la IA esté activa: la respuesta del modelo se descartó (cifra o título que no estaba en el contexto, tema ajeno) o hubo tiempo agotado; las caídas se anotan en Errores (máx. 1 cada 10 min).
 
 ## 4. lista de avisos (RNF-10, D-11)
 

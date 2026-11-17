@@ -1,5 +1,4 @@
 /** @module modules/catalogo/view — HTML del catálogo (funciones puras: datos -> componentes) */
-// Catalog HTML (pure functions: data -> components).
 import { html } from '/js/core/ui.js';
 import { page, brand, btn, actions, toolbar, resultsPanel, resultsList, dataTable, cardList, itemCard, card, note, detailView,
   statusBadge, formView, submitButton, labelItems, label, location, count, receiptBlock, emptyState, notice, date } from '/js/components/index.js';
@@ -170,7 +169,7 @@ export const pdfLines = (e) => [`Ficha bibliografica ${e.clave}`, '', `Titulo: $
   `Clasificacion: ${e.clasificacion}`, `Ubicacion: ${location(e.ubicacion)}`, '', 'Etiquetas de ejemplares:',
   ...e.codigo_ejemplares.map((c) => `  ${c.etiqueta}  |  ${e.clasificacion}  |  ${location(e.ubicacion)}`)];
 
-// "Unirse a lista de espera" (package B): prestable, active, no copies, logged-in non-visitor.
+// "Unirse a lista de espera" (paquete B): libro prestable, activo, sin ejemplares y con sesión (no visitante).
 /**
  * Indica si se ofrece unirse a lista de espera: prestable, activo, sin copias y usuario no visitante.
  * @param {Object} b - Libro.
@@ -218,7 +217,7 @@ export const detail = (b, { canEdit, canLocate, canWait = false, ejemplares = nu
       btn({ label: 'Editar ficha', href: `libros/${b.id_libro}/editar`, variant: 'primary', when: canEdit }),
       btn({ label: 'Imprimir ficha y etiquetas', action: 'imprimir', when: canEdit }),
       btn({ label: 'Descargar PDF', action: 'pdf', when: canEdit }),
-      btn({ label: b.estado === 'activo' ? 'Dar de baja' : 'Reactivar libro', action: 'toggle', variant: 'danger', when: canEdit }),
+      btn({ label: b.estado === 'activo' ? 'Dar de baja' : 'Reactivar libro', action: 'alternar', variant: 'danger', when: canEdit }),
       joinQueueBtn(b, canWait, 'primary'),
       btn({ label: 'Ver ubicación', href: `libros/${b.id_libro}/ubicacion`, variant: 'link', when: canLocate }),
       btn({ label: 'Volver', href: canEdit ? 'catalogo' : 'buscar', variant: 'link' }),
@@ -275,7 +274,7 @@ export const importPage = () => page({
 export const importResult = (r) => html`${notice({ text: `${r.creados} libro(s) creado(s); ${r.errores.length} error(es).`, tone: r.errores.length ? 'error' : 'success' })}
   ${r.errores.length ? dataTable({ rows: r.errores, columns: [{ label: 'Línea', key: 'linea' }, { label: 'Motivo', key: 'motivo' }] }) : ''}`;
 
-// ---- Public search (buscar) and floor plan ----
+// ---- Búsqueda pública (buscar) y plano ----
 
 /**
  * Tarjetas de resultados de búsqueda pública con disponibilidad y acciones.

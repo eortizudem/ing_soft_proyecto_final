@@ -1,5 +1,4 @@
 /** @module modules/compras/model — llamadas a la API de solicitudes de compra y ayudas de validación */
-// Purchase requests: API calls and validation helpers.
 import { api } from '/js/core/api.js';
 
 /**
@@ -63,7 +62,7 @@ export const total = (lines) => lines.reduce((sum, l) => sum + (Number(l.cantida
  */
 export const emptyLine = () => ({ descripcion: '', cantidad: 1, precio_unitario: 0 });
 
-// Mirrors the server rules for a quick error; the server stays the authority.
+// Replica las reglas del servidor para dar un error rápido; el servidor sigue siendo la autoridad.
 /**
  * Valida el borrador en cliente (el servidor sigue siendo la autoridad).
  * @param {{justificacion: string, detalles: Array<{descripcion: string, cantidad: number, precio_unitario: number}>}} draft - Borrador.
@@ -88,7 +87,7 @@ export function validate(draft) {
  */
 export const create = (draft) => api.post('/compras', { justificacion: draft.justificacion, detalles: draft.detalles });
 
-// Creates the request, then sends it. If sending fails, draft.id lets the caller retry only the send.
+// Crea la solicitud y luego la envía. Si el envío falla, draft.id permite reintentar solo el envío.
 /**
  * Crea la solicitud y la envía; si el envío falla, `draft.id` permite reintentar solo el envío. Llama a POST /api/compras y POST /api/compras/:id/enviar.
  * @param {{id?: number, justificacion: string, detalles: Object[]}} draft - Borrador (se le asigna `id`).
@@ -99,7 +98,7 @@ export async function createAndSend(draft) {
   return send(draft.id);
 }
 
-// Lines still to receive (ordered - received).
+// Líneas pendientes de recibir (pedido - recibido).
 /**
  * Cantidad aún por recibir de una línea.
  * @param {{cantidad: number, cantidad_recibida?: number}} l - Línea.
@@ -120,7 +119,7 @@ export const canReceive = (s) => s.estado === 'enviada' && s.detalles.some((l) =
 export const canCancel = (s) => ['pendiente', 'enviada'].includes(s.estado)
   && !s.detalles.some((l) => l.cantidad_recibida > 0);
 
-// Builds the reception payload from the form values (cant_<id_detalle> inputs).
+// Arma el cuerpo de la recepción con los valores del formulario (campos cant_<id_detalle>).
 /**
  * Construye el payload de recepción desde los valores del formulario (inputs `cant_<id_detalle>`).
  * @param {Object} data - Valores del formulario (factura_folio, factura_total, fecha_recepcion, cant_*).

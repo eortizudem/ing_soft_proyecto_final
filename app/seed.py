@@ -1,12 +1,12 @@
-"""Semilla de usuarios y datos demo de circulacion y compras (idempotente).
+"""Semilla de usuarios y datos demo de circulación y compras (idempotente).
 
-Los catalogos (roles, permisos, politicas, libros, FAQ...) los carga db/02_seed.sql.
-Datos demo que ejercitan los modulos de circulacion (vigencias en dias habiles, core/calendario.py):
-  A0512345 Maria      1 prestamo activo (LIB001) y en lista de espera de LIB005
-  A0512980 Carlos     1 prestamo VENCIDO sin devolver (LIB005), estado cache 'vencido'
-  A0513001 Laura      1 prestamo devuelto con retraso y un adeudo 'retraso' PENDIENTE (suspendida por RN-01)
-  DOC001   Docente    3 prestamos activos (LIB001, LIB002, LIB005; limite del docente = 3)
-  SOL000   compra historica 'recibida' (precio de ultima compra para la reposicion RN-04)
+Los catálogos (roles, permisos, políticas, libros, FAQ...) los carga db/02_seed.sql.
+Datos demo que ejercitan los módulos de circulación (vigencias en días hábiles, core/calendario.py):
+  A0512345 María      1 préstamo activo (LIB001) y en lista de espera de LIB005
+  A0512980 Carlos     1 préstamo VENCIDO sin devolver (LIB005), estado caché 'vencido'
+  A0513001 Laura      1 préstamo devuelto con retraso y un adeudo 'retraso' PENDIENTE (suspendida por RN-01)
+  DOC001   Docente    3 préstamos activos (LIB001, LIB002, LIB005; límite del docente = 3)
+  SOL000   compra histórica 'recibida' (precio de última compra para la reposición RN-04)
 Uso manual: python -m app.seed
 """
 from datetime import date, datetime, timedelta
@@ -30,14 +30,14 @@ USUARIOS = [
     ("COL001", "Colaborador de apoyo", "col001@ducky.edu.mx", "Colabora123", "colaborador", "recursos_humanos"),
 ]
 
-# Prestamos demo: (matricula, clave, dias atras desde hoy)
+# Préstamos demo: (matricula, clave, días atrás desde hoy)
 PRESTAMOS = [("A0512345", "LIB001", 2), ("DOC001", "LIB001", 2), ("DOC001", "LIB002", 2), ("DOC001", "LIB005", 2),
              ("A0512980", "LIB005", 21)]
 
 
 def _prestar(matricula, clave, dias_atras=2, devuelto_tarde=0):
-    """Crea el prestamo con vencimiento en dias habiles. devuelto_tarde = dias habiles de retraso al devolver
-    (crea el adeudo 'retraso' pendiente); con dias_atras grande y sin devolucion queda vencido."""
+    """Crea el préstamo con vencimiento en días hábiles. devuelto_tarde = días hábiles de retraso al devolver
+    (crea el adeudo 'retraso' pendiente); con dias_atras grande y sin devolución queda vencido."""
     ej = db.fetchone(
         """SELECT e.id_ejemplar FROM ejemplar e JOIN libro l ON l.id_libro=e.id_libro
            WHERE l.clave=%s AND e.estado='disponible' ORDER BY e.numero_copia LIMIT 1 FOR UPDATE""", (clave,))
@@ -67,7 +67,7 @@ def _prestar(matricula, clave, dias_atras=2, devuelto_tarde=0):
 
 
 def _compra(folio, comprador, justificacion, fecha, estado, lineas, extra=None):
-    """Inserta una solicitud de compra demo con sus lineas `(descripcion, cantidad, precio_usd, recibida)`.
+    """Inserta una solicitud de compra demo con sus líneas `(descripcion, cantidad, precio_usd, recibida)`.
 
     `extra` = `(factura_folio, factura_total, fecha_recepcion)`; sin el, esos campos quedan NULL.
     """
@@ -85,16 +85,16 @@ def _compra(folio, comprador, justificacion, fecha, estado, lineas, extra=None):
 
 
 def seed_if_empty(app):
-    """Carga usuarios, prestamos y compras demo solo si la tabla `usuario` esta vacia (idempotente).
+    """Carga usuarios, préstamos y compras demo solo si la tabla `usuario` está vacía (idempotente).
 
-    Corre en una transaccion con un candado asesor (`pg_advisory_xact_lock`) para que varios procesos al arrancar
+    Corre en una transacción con un candado asesor (`pg_advisory_xact_lock`) para que varios procesos al arrancar
     no dupliquen la semilla; ante cualquier error hace rollback y relanza.
 
     Args:
-        app: aplicacion Flask (se usa su contexto para obtener la conexion).
+        app: aplicación Flask (se usa su contexto para obtener la conexión).
 
     Returns:
-        True si aplico la semilla; False si ya habia usuarios.
+        True si aplicó la semilla; False si ya había usuarios.
     """
     with app.app_context():
         conn = db.get_conn()
@@ -111,12 +111,12 @@ def seed_if_empty(app):
                     (mat, nombre, correo, generate_password_hash(pw), rol, fuente))
             for mat, clave, atras in PRESTAMOS:
                 _prestar(mat, clave, atras)
-            _prestar("A0513001", "LIB004", 20, devuelto_tarde=2)      # devuelto con 2 dias habiles de retraso: $20 pendiente
+            _prestar("A0513001", "LIB004", 20, devuelto_tarde=2)      # devuelto con 2 días hábiles de retraso: $20 pendiente
             db.execute(
                 """INSERT INTO lista_espera(id_usuario,id_libro,posicion,estado)
                    VALUES ((SELECT id_usuario FROM usuario WHERE matricula='A0512345'),
                            (SELECT id_libro FROM libro WHERE clave='LIB005'),1,'en_espera')""")
-            # SOL000: compra historica recibida (precios en USD, D-28); SOL001: solicitud pendiente de la demo
+            # SOL000: compra histórica recibida (precios en USD, D-28); SOL001: solicitud pendiente de la demo
             _compra("SOL000", "COM001", "Reposición de la colección básica.", "2026-09-10", "recibida",
                     (("Ingeniería de software", 3, 42, 3), ("Clean Code", 2, 30, 2)), ("FAC-2026-001", 186, "2026-09-20"))
             _compra("SOL001", "COM001", "Actualizar la bibliografía de las materias de computación.", "2026-10-14",

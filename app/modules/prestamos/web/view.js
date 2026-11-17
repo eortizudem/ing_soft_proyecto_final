@@ -108,6 +108,7 @@ const receiptItems = (r) => [
   ['Ubicación', location(r.libro.ubicacion)],
   ['Fecha de préstamo', date(r.fecha_prestamo)],
   ['Fecha de vencimiento', date(r.fecha_vencimiento)],
+  ['Registró', r.bibliotecario || 'Sin registro'],
   ['Plazo', `${r.dias_prestamo} días hábiles`],
   ['Renovaciones permitidas', r.politica.max_renovaciones],
   ['Multa por día hábil de retraso', money(r.politica.multa_diaria)],
@@ -120,9 +121,10 @@ const receiptItems = (r) => [
  * @returns {Array<string>} Líneas del documento.
  */
 export const receiptLines = (r) => [
-  'BIBLIOTECA DUCKY - RECIBO DE PRESTAMO', r.folio, '',
+  'BIBLIOTECA DUCKY - RECIBO DE PRÉSTAMO', r.folio, '',
   ...receiptItems(r).map(([k, v]) => `${k}: ${v}`), '',
-  'Devuelve el libro en la fecha de vencimiento para evitar multas.',
+  'Devuelve el libro en la fecha de vencimiento para evitar multas.', '',
+  'Firma del usuario: ______________________    Sello de la biblioteca: ______________',
 ];
 
 /**
@@ -160,7 +162,8 @@ export const detail = (p, r, canAdeudos = false) => {
       ],
     })}
     ${receiptBlock({ id: 'recibo', title: 'Recibo de préstamo', folio: r.folio, items: receiptItems(r),
-      footer: note('Importante', 'Devuelve el libro en la fecha de vencimiento para evitar multas.') })}
+      footer: html`${note('Importante', 'Devuelve el libro en la fecha de vencimiento para evitar multas.')}
+        <p class="mono">Firma del usuario: ______________________ &nbsp; Sello de la biblioteca: ______________</p>` })}
     <div class="actions">${btn({ label: 'Imprimir recibo', action: 'imprimir' })}${btn({ label: 'Descargar PDF', action: 'pdf' })}
       ${btn({ label: 'Enviar por correo', action: 'enviar', data: { canal: 'email' } })}
       ${btn({ label: 'Enviar por WhatsApp', action: 'enviar', data: { canal: 'whatsapp' } })}</div>`,

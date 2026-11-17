@@ -48,7 +48,7 @@ function returned(r) {
   return text;
 }
 
-// Renew / return buttons shared by the list rows and the detail page.
+// Botones de renovar y devolver compartidos por las filas de la lista y la página de detalle.
 /**
  * Enlaza los botones Renovar/Devolver (compartidos por el listado y el detalle) con confirmación.
  * @param {HTMLElement} main - Contenedor de la página.

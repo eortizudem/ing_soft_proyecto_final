@@ -2,7 +2,7 @@
 from app.testing import login, sql, user_payload
 
 
-def test_login_ok(anon):
+def test_inicio_de_sesion_correcto(anon):
     """Login valido (matricula sin distinguir mayusculas) devuelve el usuario publico con permisos y abre sesion."""
     r = login(anon, "adm001", "Admin123")
     assert r.status_code == 200
@@ -12,14 +12,14 @@ def test_login_ok(anon):
     assert anon.get("/api/me").get_json()["user"]["matricula"] == "ADM001"
 
 
-def test_login_fail(anon):
+def test_inicio_de_sesion_fallido(anon):
     """Contrasena incorrecta o matricula inexistente responden 401 con el mismo mensaje."""
     r = login(anon, "ADM001", "mala")
     assert r.status_code == 401 and r.get_json()["error"] == "Clave o contraseña incorrecta"
     assert login(anon, "NOEXISTE", "x").status_code == 401
 
 
-def test_login_inactive(anon, admin):
+def test_inicio_de_sesion_cuenta_inactiva(anon, admin):
     """Una cuenta inactiva no inicia sesion (403)."""
     p = user_payload(estado="inactivo")
     assert admin.post("/api/usuarios", json=p).status_code == 201
@@ -27,12 +27,12 @@ def test_login_inactive(anon, admin):
     assert r.status_code == 403 and r.get_json()["error"] == "La cuenta está inactiva"
 
 
-def test_me_requires_login(anon):
+def test_me_exige_sesion(anon):
     """`/api/me` sin sesion responde 401."""
     assert anon.get("/api/me").status_code == 401
 
 
-def test_logout_and_bitacora(app):
+def test_cierre_de_sesion_y_bitacora(app):
     """El logout invalida la sesion y `login`/`logout` quedan en bitacora."""
     from app.testing import client_as
     c = client_as(app, "A0512345", "Alumno123")

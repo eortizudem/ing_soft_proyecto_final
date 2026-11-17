@@ -2,7 +2,7 @@
 import { html, raw, esc } from '/js/core/ui.js';
 import {
   page, brand, btn, chatPanel, chatBubble, formView, submitButton, toolbar, dataTable, statusBadge,
-  resultsPanel, labelItems, datetime,
+  resultsPanel, labelItems, datetime, badge,
 } from '/js/components/index.js';
 
 /**
@@ -27,14 +27,17 @@ const bookList = (books = []) => html`<ul class="stack">${books.map((b) => html`
  */
 const links = (items = []) => html`<p>${items.map((l) => btn({ label: l.texto, href: l.ruta, variant: 'link' }))}</p>`;
 
+/** Leyendas de la burbuja según de dónde salió la respuesta (`fuente` de la API). */
+const NOTAS = { ia: 'Respuesta con IA', reglas: 'Respuesta básica' };
+
 /**
- * Burbuja de chat a partir de un mensaje guardado ({emisor, texto}) o una respuesta de la API ({texto, libros, enlaces}).
- * @param {{emisor?: string, texto: string, libros?: Array<object>, enlaces?: Array<object>}} m - mensaje o respuesta.
+ * Burbuja de chat a partir de un mensaje guardado ({emisor, texto}) o una respuesta de la API ({texto, fuente, libros, enlaces}).
+ * @param {{emisor?: string, texto: string, fuente?: string, libros?: Array<object>, enlaces?: Array<object>}} m - mensaje o respuesta.
  * @param {string} [emisor=m.emisor] - `usuario` o `asistente`.
  * @returns {object} burbuja renderizable.
  */
 export const bubble = (m, emisor = m.emisor) => chatBubble({
-  emisor, texto: lines(m.texto), extra: html`${m.libros?.length ? bookList(m.libros) : ''}${m.enlaces?.length ? links(m.enlaces) : ''}`,
+  emisor, texto: lines(m.texto), nota: NOTAS[m.fuente] || '', extra: html`${m.libros?.length ? bookList(m.libros) : ''}${m.enlaces?.length ? links(m.enlaces) : ''}`,
 });
 
 /**
@@ -65,14 +68,15 @@ const rateForm = () => formView({
 
 /**
  * Pantalla del chat del asistente (escritorio o móvil): sugerencias, panel de chat y formulario de opinión.
- * @param {{suggestions: string[], staff: boolean, mobile: boolean, messages: Array<{emisor: string, texto: string}>}} datos - sugerencias, si el usuario es personal (muestra acceso a consultas), versión móvil e historial.
+ * @param {{suggestions: string[], staff: boolean, mobile: boolean, messages: Array<{emisor: string, texto: string}>, estado: {ia: boolean, modelo: string|null}}} datos - sugerencias, si el usuario es personal (muestra acceso a consultas), versión móvil, historial y si hay IA.
  * @returns {object} página.
  */
-export function chatPage({ suggestions, staff, mobile, messages }) {
+export function chatPage({ suggestions, staff, mobile, messages, estado }) {
   return html`${mobile ? brand() : ''}${page({
     title: 'Asistente virtual',
     desc: 'Resuelve dudas de la biblioteca. Si no puedo ayudarte, escribe "hablar con un bibliotecario".',
-    actions: html`${btn({ label: 'Consultas para el bibliotecario', href: 'asistente/consultas', when: !!staff && !mobile })}
+    actions: html`${estado.ia ? badge(`Respuestas con IA (${estado.modelo})`) : badge('Modo básico', 'warn')}
+      ${btn({ label: 'Consultas para el bibliotecario', href: 'asistente/consultas', when: !!staff && !mobile })}
       ${btn({ label: mobile ? 'Búsqueda móvil' : 'Ver en móvil', href: mobile ? 'movil' : 'movil/asistente', variant: 'link' })}
       ${btn({ label: 'Volver a escritorio', href: 'asistente', variant: 'link', when: mobile })}`,
     body: html`${chips(suggestions)}${chatPanel({ id: 'chat', messages: messages.length ? messages.map((m) => bubble(m)) : [welcome()],

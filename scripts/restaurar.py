@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
-"""Restauracion de un respaldo de LibriGest (RNF-02, D-14).
+"""Restauración de un respaldo de LibriGest (RNF-02, D-14).
 
 Uso:
-  python3 scripts/restaurar.py backups/librigest_AAAAmmdd_HHMMSS.dump              # pide confirmacion [s/N]
-  python3 scripts/restaurar.py <archivo.dump> -y                                   # sin confirmacion (--yes)
+  python3 scripts/restaurar.py backups/librigest_AAAAmmdd_HHMMSS.dump              # pide confirmación [s/N]
+  python3 scripts/restaurar.py <archivo.dump> -y                                   # sin confirmación (--yes)
   python3 scripts/restaurar.py <archivo.dump> --db otra_bd                         # BD destino / de referencia
   python3 scripts/restaurar.py <archivo.dump> --usuario postgres                   # rol de PostgreSQL
   python3 scripts/restaurar.py <archivo.dump> --verificar                          # prueba no destructiva
 
-Sin --verificar: pide confirmacion [s/N] (omitir con -y) y restaura SOBRE --db con
+Sin --verificar: pide confirmación [s/N] (omitir con -y) y restaura SOBRE --db con
 pg_restore --clean --if-exists (reemplaza los datos actuales).
 Con --verificar: restaura en una BD temporal, compara filas por tabla contra el .conteos del respaldo
 (o contra --db si no existe), elimina la BD temporal y devuelve 0 solo si todo coincide. No toca --db.
 
-Codigos de salida: 0 restauracion o verificacion correcta; 1 cancelado, conteos distintos, archivo inexistente,
-servicio db caido o error de psql/pg_restore.
+Códigos de salida: 0 restauración o verificación correcta; 1 cancelado, conteos distintos, archivo inexistente,
+servicio db caído o error de psql/pg_restore.
 
 SEGURIDAD: restaurar sin --verificar REEMPLAZA los datos actuales de --db (pg_restore --clean --if-exists);
 hacer antes un respaldo con respaldo.py. Sin -y exige responder s/si/y/yes.
@@ -36,7 +36,7 @@ def _restaurar(archivo, usuario, db):
         db: base destino (se reemplazan sus objetos).
 
     Returns:
-        Codigo de salida de pg_restore (puede ser != 0 solo por advertencias; su stderr se imprime).
+        Código de salida de pg_restore (puede ser != 0 solo por advertencias; su stderr se imprime).
     """
     with open(archivo, "rb") as f:
         r = _pg.compose("exec", "-T", "db", "pg_restore", "-U", usuario, "-d", db, "--clean", "--if-exists",
@@ -48,7 +48,7 @@ def _restaurar(archivo, usuario, db):
 
 
 def _esperados(archivo, usuario, db):
-    """Obtiene los conteos de referencia para la verificacion.
+    """Obtiene los conteos de referencia para la verificación.
 
     Args:
         archivo: Path del .dump; se busca `<archivo>.conteos` junto a el.
@@ -56,7 +56,7 @@ def _esperados(archivo, usuario, db):
         db: base de referencia si no existe el archivo .conteos.
 
     Returns:
-        Tupla (dict {tabla: filas}, descripcion del origen para el reporte).
+        Tupla (dict {tabla: filas}, descripción del origen para el reporte).
     """
     conteos = archivo.with_suffix(".conteos")
     if conteos.exists():
@@ -76,7 +76,7 @@ def verificar(archivo, usuario, db):
         db: base de referencia (si no hay .conteos).
 
     Returns:
-        0 si todos los conteos coinciden; 1 si hay diferencias o no se restauro ninguna tabla.
+        0 si todos los conteos coinciden; 1 si hay diferencias o no se restauró ninguna tabla.
     """
     temporal = "verif_" + datetime.now().strftime("%Y%m%d_%H%M%S")
     esperados, origen = _esperados(archivo, usuario, db)
@@ -102,13 +102,13 @@ def main(argv=None):
     """Restaura un respaldo sobre `--db` o lo verifica con `--verificar`.
 
     Args:
-        argv: lista de argumentos (None usa sys.argv); util para pruebas.
+        argv: lista de argumentos (None usa sys.argv); útil para pruebas.
 
     Returns:
-        0 en exito; 1 si el usuario cancela o la verificacion falla.
+        0 en éxito; 1 si el usuario cancela o la verificación falla.
 
     Raises:
-        SystemExit: si el archivo no existe, el servicio db no esta activo o la restauracion no deja tablas.
+        SystemExit: si el archivo no existe, el servicio db no está activo o la restauración no deja tablas.
     """
     cfg = _pg.config()
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)

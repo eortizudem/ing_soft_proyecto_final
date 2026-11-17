@@ -48,7 +48,7 @@ def test_permisos(alumno, anon):
     """Sin sesión 401 y alumno 403 en las rutas de adeudos."""
     assert anon.get("/api/adeudos").status_code == 401
     assert alumno.get("/api/adeudos").status_code == 403
-    assert alumno.get("/api/tipo-cambio").status_code == 403
+    assert alumno.get("/api/tipo_cambio").status_code == 403
     assert alumno.post("/api/adeudos/perdida", json={"id_prestamo": 1}).status_code == 403
 
 
@@ -102,7 +102,7 @@ def test_cancelar_solo_admin(admin, bibliotecario):
 
 def test_tipo_cambio(bibliotecario):
     """El endpoint devuelve el tipo de cambio simulado."""
-    r = bibliotecario.get("/api/tipo-cambio").get_json()
+    r = bibliotecario.get("/api/tipo_cambio").get_json()
     assert r["usd_mxn"] == 18.0 and r["fuente"] == "simulado" and r["nota"]
 
 

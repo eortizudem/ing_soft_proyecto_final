@@ -29,13 +29,16 @@ services:
       context: .
       dockerfile: Dockerfile
     restart: unless-stopped
-    # host:contenedor; la app queda en http://localhost:8000
+    # host:contenedor; la app queda en http://localhost:8000 (WEB_PORT cambia el puerto del anfitrion)
     ports:
-      - "8000:8000"
-    # No arranca hasta que PostgreSQL pase su healthcheck
+      - "${WEB_PORT:-8000}:8000"
+    # No arranca hasta que PostgreSQL pase su healthcheck. Ollama solo debe haber iniciado: sin el, el asistente
+    # responde con sus reglas (la app no depende de la IA).
     depends_on:
       db:
         condition: service_healthy
+      ollama:
+        condition: service_started
     # Configuracion de la aplicacion (ver app/config.py)
     environment:
       TZ: ${TZ:-America/Mexico_City}
@@ -51,6 +54,11 @@ services:
       WEB_CONCURRENCY: ${WEB_CONCURRENCY:-4}  # procesos de gunicorn (una por nucleo)
       DEMO_MOSTRAR_TOKEN: ${DEMO_MOSTRAR_TOKEN:-true}
       HTTPS: ${HTTPS:-false}
+      # Asistente con IA (D-13): modelo local en el servicio ollama; ASISTENTE_IA=0 lo desactiva (solo reglas)
+      ASISTENTE_IA: ${ASISTENTE_IA:-1}
+      OLLAMA_URL: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:1.5b}
+      OLLAMA_TIMEOUT: ${OLLAMA_TIMEOUT:-20}  # segundos por respuesta; al vencer se usan las reglas
     # Mismo chequeo que el HEALTHCHECK del Dockerfile (GET /api/health); start_period da tiempo a gunicorn
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=3)"]
@@ -59,6 +67,29 @@ services:
       retries: 5
       start_period: 15s
 
-# Volumen con nombre: sobrevive a `docker compose down` (se borra solo con `down -v`)
+  # Servidor de modelos de lenguaje (Ollama) para el asistente (D-13). El modelo lo descarga scripts/levantar.py (ollama pull). Sin puerto publicado: solo web lo usa por la red interna
+  ollama:
+    image: ollama/ollama:0.40.16
+    restart: unless-stopped
+    # Para probarlo desde el anfitrion (curl http://localhost:11434/api/tags) descomenta:
+    # ports:
+    #   - "11434:11434"
+    environment:
+      OLLAMA_KEEP_ALIVE: 10m   # el modelo queda cargado 10 min tras la ultima pregunta (la siguiente responde mas rapido)
+      OLLAMA_NUM_PARALLEL: 1   # una respuesta a la vez: reduce la memoria usada
+      OLLAMA_MAX_LOADED_MODELS: 1
+    # El modelo por defecto (qwen2.5:1.5b) ocupa ~1.4 GB en memoria; este tope protege al equipo con modelos mas grandes
+    mem_limit: ${OLLAMA_MEM_LIMIT:-2g}
+    volumes:
+      # Modelos descargados (~1 GB el modelo por defecto): sobreviven a `down`; se borran con `down -v`
+      - ollama_models:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+# Volumenes con nombre: sobreviven a `docker compose down` (se borran solo con `down -v`)
 volumes:
   pgdata:
+  ollama_models:
